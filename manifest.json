@@ -1,11 +1,16 @@
-
 {
   "name": "BCS Gamer Tournament",
   "short_name": "BCS Gamer",
   "start_url": "./viewer.html",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#111827",
+  "background_color": "#111827",
+  "theme_color": "#059669",
   "description": "BCS Gamer Tournament fixtures, results and group points",
-  "icons": []
+  "icons": [
+    {
+      "src": "https://github.com/sopon72.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
