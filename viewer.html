@@ -13,4 +13,8 @@ function fix(){let o="<h2>Fixtures</h2>";matches.forEach(m=>o+=`<div class="card
 function res(){let o="<h2>Match Results</h2>",a=matches.filter(done);if(!a.length)o+="<div class='card'>No completed results yet.</div>";a.forEach(m=>o+=`<div class="card"><b>Group ${gn(m.group_id)}</b><div class="row"><span>${tn(m.team_a_id)}</span><span class="score">${m.score_a} - ${m.score_b}</span><span>${tn(m.team_b_id)}</span></div></div>`);document.getElementById("app").innerHTML=o}
 function pts(){let o="<h2>Group Points</h2>";groups.forEach(g=>{let ts=(g.teams||[]).map(t=>({id:t.id,name:t.name,p:0,w:0,d:0,l:0})),mp={};ts.forEach(t=>mp[t.id]=t);matches.filter(m=>m.group_id===g.id&&done(m)).forEach(m=>{let a=mp[m.team_a_id],b=mp[m.team_b_id];if(!a||!b)return;if(+m.score_a>+m.score_b){a.p+=3;a.w++;b.l++}else if(+m.score_a<+m.score_b){b.p+=3;b.w++;a.l++}else{a.p++;b.p++;a.d++;b.d++}});ts.sort((a,b)=>b.p-a.p||b.w-a.w);o+=`<div class="card"><b>Group ${g.name}</b>`;ts.forEach(t=>o+=`<div class="row"><span>${t.name}</span><span>${t.p} pts</span></div>`);o+="</div>"});document.getElementById("app").innerHTML=o}
 show("fixtures");load();setInterval(load,10000);
+</script><script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./service-worker.js");
+}
 </script></body></html>
