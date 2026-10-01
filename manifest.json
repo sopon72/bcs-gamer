@@ -1,1 +1,11 @@
 
+{
+  "name": "BCS Gamer Tournament",
+  "short_name": "BCS Gamer",
+  "start_url": "./viewer.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#111827",
+  "description": "BCS Gamer Tournament fixtures, results and group points",
+  "icons": []
+}
