@@ -1,22 +1,478 @@
-<!DOCTYPE html><html lang="bn"><link rel="manifest" href="./manifest.json"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BCS Gamer</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><style>body{font-family:Arial;margin:0;background:#f5f7fb;color:#172033}header{background:#111827;color:#fff;padding:18px;text-align:center}nav{display:flex;gap:6px;padding:10px;background:#fff}button{flex:1;padding:11px;border:0;border-radius:8px}button.active{background:#111827;color:#fff}main{padding:14px}.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px}.row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #eee}.small{font-size:13px;color:#6b7280}.score{font-weight:bold}</style></head><body><header><h2>BCS Gamer</h2><div class="small" style="color:#d1d5db">Public Tournament Viewer</div></header><nav><button id="b1" onclick="show('fixtures')">Fixtures</button><button id="b2" onclick="show('results')">Match Results</button><button id="b3" onclick="show('points')">Group Points</button></nav><main id="app">Loading...</main><script>
-const SUPABASE_URL="https://txfissofmkpfizavrpcp.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY="sb_publishable_SUQ_jBXrre6ClvPyxZBZxg_aYYIieEN
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 
-তুমি নিজেই বসিয়ে দাও;
-const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-let groups=[],matches=[],current="fixtures";
-async function load(){try{let g=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id)").order("name");if(g.error)throw g.error;let m=await supabaseClient.from("matches").select("id,group_id,team_a_id,team_b_id,score_a,score_b,status,stage").eq("stage","group");if(m.error)throw m.error;groups=g.data||[];matches=m.data||[];render()}catch(e){document.getElementById("app").innerHTML="<div class='card'>Data load হয়নি।</div>"}}
-function tn(id){for(const g of groups){const t=(g.teams||[]).find(x=>x.id===id);if(t)return t.name}return"Unknown Team"}
-function gn(id){const g=groups.find(x=>x.id===id);return g?g.name:""}
-function done(m){return m.status==="completed"||(m.score_a!==null&&m.score_b!==null)}
-function show(x){current=x;["fixtures","results","points"].forEach((p,i)=>document.getElementById("b"+(i+1)).classList.toggle("active",p===x));render()}
-function render(){if(current==="fixtures")fix();if(current==="results")res();if(current==="points")pts()}
-function fix(){let o="<h2>Fixtures</h2>";matches.forEach(m=>o+=`<div class="card"><b>Group ${gn(m.group_id)}</b><div class="row"><span>${tn(m.team_a_id)}</span><span>vs</span><span>${tn(m.team_b_id)}</span></div><div class="small">${done(m)?"Completed":"Upcoming"}</div></div>`);document.getElementById("app").innerHTML=o}
-function res(){let o="<h2>Match Results</h2>",a=matches.filter(done);if(!a.length)o+="<div class='card'>No completed results yet.</div>";a.forEach(m=>o+=`<div class="card"><b>Group ${gn(m.group_id)}</b><div class="row"><span>${tn(m.team_a_id)}</span><span class="score">${m.score_a} - ${m.score_b}</span><span>${tn(m.team_b_id)}</span></div></div>`);document.getElementById("app").innerHTML=o}
-function pts(){let o="<h2>Group Points</h2>";groups.forEach(g=>{let ts=(g.teams||[]).map(t=>({id:t.id,name:t.name,p:0,w:0,d:0,l:0})),mp={};ts.forEach(t=>mp[t.id]=t);matches.filter(m=>m.group_id===g.id&&done(m)).forEach(m=>{let a=mp[m.team_a_id],b=mp[m.team_b_id];if(!a||!b)return;if(+m.score_a>+m.score_b){a.p+=3;a.w++;b.l++}else if(+m.score_a<+m.score_b){b.p+=3;b.w++;a.l++}else{a.p++;b.p++;a.d++;b.d++}});ts.sort((a,b)=>b.p-a.p||b.w-a.w);o+=`<div class="card"><b>Group ${g.name}</b>`;ts.forEach(t=>o+=`<div class="row"><span>${t.name}</span><span>${t.p} pts</span></div>`);o+="</div>"});document.getElementById("app").innerHTML=o}
-show("fixtures");load();setInterval(load,10000);
-</script><script>
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./service-worker.js");
+<title>BCS Gamer Public Viewer</title>
+
+<link rel="manifest" href="./manifest.json">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial,sans-serif;
+  background:#111827;
+  color:white;
 }
-</script></body></html>
+header{
+  background:#059669;
+  padding:20px;
+  text-align:center;
+}
+h1{
+  margin:0 0 5px;
+}
+.tabs{
+  display:flex;
+  gap:5px;
+  padding:10px;
+  background:#1f2937;
+}
+button{
+  flex:1;
+  padding:12px 5px;
+  border:0;
+  border-radius:8px;
+  background:#374151;
+  color:white;
+  font-weight:bold;
+}
+button.active{
+  background:#059669;
+}
+#content{
+  padding:15px;
+}
+.card{
+  background:#1f2937;
+  margin-bottom:12px;
+  padding:15px;
+  border-radius:12px;
+}
+.group{
+  border:1px solid #374151;
+  border-radius:10px;
+  padding:12px;
+  margin-bottom:12px;
+}
+.match{
+  padding:10px;
+  border-bottom:1px solid #374151;
+}
+.match:last-child{
+  border-bottom:0;
+}
+.score{
+  font-size:20px;
+  font-weight:bold;
+  margin-top:5px;
+}
+.error{
+  background:#7f1d1d;
+  padding:15px;
+  border-radius:10px;
+}
+.small{
+  color:#9ca3af;
+  font-size:13px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>BCS Gamer</h1>
+  <div>Public Tournament Viewer</div>
+</header>
+
+<div class="tabs">
+  <button id="fixturesBtn" onclick="showPage('fixtures')">Fixtures</button>
+  <button id="resultsBtn" onclick="showPage('results')">Match Results</button>
+  <button id="pointsBtn" onclick="showPage('points')">Group Points</button>
+</div>
+
+<div id="content">
+  Loading...
+</div>
+
+<script>
+
+const SUPABASE_URL =
+"https://txfissofmkpfizavrpcp.supabase.co";
+
+/*
+  এখানে তোমার আগের sb_publishable_... key বসাবে।
+*/
+const SUPABASE_PUBLISHABLE_KEY =
+"sb_publishable_SUQ_jBXrre6ClvPyxZBZxg_aYYIieEN";
+
+const supabaseClient =
+window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+
+let groups = [];
+let teams = [];
+let matches = [];
+
+function setActive(page){
+
+  document.querySelectorAll(".tabs button")
+    .forEach(b => b.classList.remove("active"));
+
+  if(page === "fixtures")
+    document.getElementById("fixturesBtn").classList.add("active");
+
+  if(page === "results")
+    document.getElementById("resultsBtn").classList.add("active");
+
+  if(page === "points")
+    document.getElementById("pointsBtn").classList.add("active");
+}
+
+function teamName(id){
+
+  const team = teams.find(t => t.id === id);
+
+  return team ? team.name : "Unknown Team";
+}
+
+function groupName(id){
+
+  const group = groups.find(g => g.id === id);
+
+  return group ? group.name : "Unknown Group";
+}
+
+async function loadData(){
+
+  const content = document.getElementById("content");
+
+  content.innerHTML = "Loading...";
+
+  try{
+
+    const groupsResult =
+      await supabaseClient
+      .from("groups")
+      .select("id,name,tournament_id")
+      .order("name");
+
+    if(groupsResult.error)
+      throw groupsResult.error;
+
+    groups = groupsResult.data || [];
+
+    const teamsResult =
+      await supabaseClient
+      .from("teams")
+      .select("id,name,group_id")
+      .order("name");
+
+    if(teamsResult.error)
+      throw teamsResult.error;
+
+    teams = teamsResult.data || [];
+
+    const matchesResult =
+      await supabaseClient
+      .from("matches")
+      .select(`
+        id,
+        tournament_id,
+        group_id,
+        team_a_id,
+        team_b_id,
+        score_a,
+        score_b,
+        status,
+        stage
+      `)
+      .order("id");
+
+    if(matchesResult.error)
+      throw matchesResult.error;
+
+    matches = matchesResult.data || [];
+
+    showPage(currentPage);
+
+  }catch(error){
+
+    console.error(error);
+
+    content.innerHTML = `
+      <div class="error">
+        <b>Data load হয়নি।</b>
+        <br><br>
+        ${error.message || "Unknown error"}
+      </div>
+    `;
+  }
+}
+
+let currentPage = "fixtures";
+
+function showPage(page){
+
+  currentPage = page;
+
+  setActive(page);
+
+  const content = document.getElementById("content");
+
+  if(page === "fixtures")
+    showFixtures();
+
+  if(page === "results")
+    showResults();
+
+  if(page === "points")
+    showPoints();
+}
+
+function showFixtures(){
+
+  let html = "";
+
+  const fixtures =
+    matches.filter(m =>
+      m.stage === "group" &&
+      (!m.status ||
+       m.status === "scheduled" ||
+       m.status === "upcoming" ||
+       m.status === "pending")
+    );
+
+  if(fixtures.length === 0){
+
+    html = `
+      <div class="card">
+        কোনো Fixture পাওয়া যায়নি।
+      </div>
+    `;
+
+  }else{
+
+    fixtures.forEach(m => {
+
+      html += `
+        <div class="card">
+          <b>${groupName(m.group_id)}</b>
+
+          <div class="match">
+            ${teamName(m.team_a_id)}
+            <br>
+            <span class="small">VS</span>
+            <br>
+            ${teamName(m.team_b_id)}
+          </div>
+        </div>
+      `;
+
+    });
+  }
+
+  content.innerHTML = html;
+}
+
+function showResults(){
+
+  let html = "";
+
+  const results =
+    matches.filter(m =>
+      m.stage === "group" &&
+      (
+        m.status === "completed" ||
+        m.status === "finished" ||
+        m.score_a !== null ||
+        m.score_b !== null
+      )
+    );
+
+  if(results.length === 0){
+
+    html = `
+      <div class="card">
+        এখনো কোনো Match Result নেই।
+      </div>
+    `;
+
+  }else{
+
+    results.forEach(m => {
+
+      html += `
+        <div class="card">
+          <b>${groupName(m.group_id)}</b>
+
+          <div class="match">
+
+            ${teamName(m.team_a_id)}
+
+            <div class="score">
+              ${m.score_a ?? 0}
+              -
+              ${m.score_b ?? 0}
+            </div>
+
+            ${teamName(m.team_b_id)}
+
+          </div>
+        </div>
+      `;
+
+    });
+  }
+
+  content.innerHTML = html;
+}
+
+function showPoints(){
+
+  let html = "";
+
+  groups.forEach(group => {
+
+    const groupTeams =
+      teams.filter(t => t.group_id === group.id);
+
+    const table = {};
+
+    groupTeams.forEach(team => {
+
+      table[team.id] = {
+        name: team.name,
+        played: 0,
+        win: 0,
+        draw: 0,
+        loss: 0,
+        points: 0
+      };
+
+    });
+
+    matches
+      .filter(m =>
+        m.group_id === group.id &&
+        m.stage === "group" &&
+        m.score_a !== null &&
+        m.score_b !== null
+      )
+      .forEach(m => {
+
+        if(!table[m.team_a_id] || !table[m.team_b_id])
+          return;
+
+        const a = Number(m.score_a);
+        const b = Number(m.score_b);
+
+        table[m.team_a_id].played++;
+        table[m.team_b_id].played++;
+
+        if(a > b){
+
+          table[m.team_a_id].win++;
+          table[m.team_a_id].points += 3;
+
+          table[m.team_b_id].loss++;
+
+        }else if(b > a){
+
+          table[m.team_b_id].win++;
+          table[m.team_b_id].points += 3;
+
+          table[m.team_a_id].loss++;
+
+        }else{
+
+          table[m.team_a_id].draw++;
+          table[m.team_b_id].draw++;
+
+          table[m.team_a_id].points++;
+          table[m.team_b_id].points++;
+        }
+
+      });
+
+    const rows =
+      Object.values(table)
+      .sort((a,b) => b.points - a.points);
+
+    html += `
+      <div class="card">
+        <h2>Group ${group.name}</h2>
+
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th align="left">Team</th>
+            <th>MP</th>
+            <th>W</th>
+            <th>D</th>
+            <th>L</th>
+            <th>Pts</th>
+          </tr>
+    `;
+
+    rows.forEach(r => {
+
+      html += `
+        <tr>
+          <td style="padding:8px 2px;">
+            ${r.name}
+          </td>
+          <td align="center">${r.played}</td>
+          <td align="center">${r.win}</td>
+          <td align="center">${r.draw}</td>
+          <td align="center">${r.loss}</td>
+          <td align="center">
+            <b>${r.points}</b>
+          </td>
+        </tr>
+      `;
+
+    });
+
+    html += `
+        </table>
+      </div>
+    `;
+
+  });
+
+  if(!groups.length){
+
+    html = `
+      <div class="card">
+        কোনো Group পাওয়া যায়নি।
+      </div>
+    `;
+  }
+
+  content.innerHTML = html;
+}
+
+showPage("fixtures");
+
+loadData();
+
+setInterval(loadData,10000);
+
+if("serviceWorker" in navigator){
+
+  navigator.serviceWorker
+    .register("./service-worker.js")
+    .catch(error => console.log(error));
+
+}
+
+</script>
+
+</body>
+  </html>
