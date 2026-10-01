@@ -4,93 +4,176 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 
-<title>BCS Gamer Public Viewer</title>
+<title>BCS Gamer Tournament</title>
 
 <link rel="manifest" href="./manifest.json">
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
+*{
+  box-sizing:border-box;
+}
+
 body{
   margin:0;
   font-family:Arial,sans-serif;
-  background:#111827;
-  color:white;
+  background:#0f172a;
+  color:#fff;
 }
 
 header{
   background:#059669;
-  padding:20px;
+  padding:22px 15px;
   text-align:center;
 }
 
-h1{
-  margin:0 0 5px;
+header h1{
+  margin:0;
+  font-size:28px;
+}
+
+header p{
+  margin:6px 0 0;
+  opacity:.9;
 }
 
 .tabs{
   display:flex;
-  gap:5px;
+  gap:6px;
   padding:10px;
-  background:#1f2937;
+  background:#1e293b;
+  position:sticky;
+  top:0;
+  z-index:10;
 }
 
-button{
+.tabs button{
   flex:1;
-  padding:12px 5px;
   border:0;
   border-radius:8px;
-  background:#374151;
+  padding:12px 4px;
+  background:#334155;
   color:white;
   font-weight:bold;
+  font-size:13px;
 }
 
-button.active{
+.tabs button.active{
   background:#059669;
 }
 
 #content{
   padding:15px;
+  max-width:700px;
+  margin:auto;
 }
 
 .card{
-  background:#1f2937;
-  margin-bottom:12px;
-  padding:15px;
-  border-radius:12px;
+  background:#1e293b;
+  border-radius:14px;
+  padding:16px;
+  margin-bottom:14px;
 }
 
-.match{
-  padding:15px;
-  margin:10px 0;
-  background:#111827;
-  border-radius:10px;
-}
-
-.score{
+.card h2{
+  margin-top:0;
   font-size:20px;
-  font-weight:bold;
-  margin:8px 0;
-  text-align:center;
-}
-
-.error{
-  background:#7f1d1d;
-  padding:15px;
-  border-radius:10px;
-}
-
-.loading{
-  text-align:center;
-  padding:30px;
 }
 
 select{
   width:100%;
-  padding:12px;
-  border-radius:8px;
+  padding:13px;
+  border:0;
+  border-radius:9px;
   font-size:16px;
-  box-sizing:border-box;
+  background:white;
+  color:#111827;
+}
+
+.match{
+  background:#0f172a;
+  border-radius:12px;
+  padding:16px;
+  margin-top:10px;
+}
+
+.team{
+  text-align:center;
+  font-size:18px;
+  font-weight:bold;
+}
+
+.vs{
+  text-align:center;
+  color:#94a3b8;
+  font-weight:bold;
+  margin:9px 0;
+}
+
+.group-title{
+  color:#34d399;
+}
+
+.score{
+  text-align:center;
+  font-size:24px;
+  font-weight:bold;
+  margin:8px 0;
+}
+
+.loading{
+  text-align:center;
+  padding:40px 10px;
+  color:#94a3b8;
+}
+
+.error{
+  background:#7f1d1d;
+  padding:16px;
+  border-radius:12px;
+  line-height:1.6;
+}
+
+.empty{
+  text-align:center;
+  color:#94a3b8;
+  padding:20px;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:14px;
+}
+
+th,td{
+  padding:9px 4px;
+  border-bottom:1px solid #334155;
+  text-align:center;
+}
+
+th:first-child,
+td:first-child{
+  text-align:left;
+}
+
+.qr-box{
+  text-align:center;
+}
+
+.qr-box img{
+  width:220px;
+  max-width:100%;
+  background:white;
+  padding:10px;
+  border-radius:10px;
+}
+
+.small{
+  color:#94a3b8;
+  font-size:13px;
+  line-height:1.5;
 }
 </style>
 </head>
@@ -99,38 +182,50 @@ select{
 
 <header>
   <h1>BCS Gamer</h1>
-  <div>Public Tournament Viewer</div>
+  <p>Tournament Public Viewer</p>
 </header>
 
 <div class="tabs">
-  <button id="fixturesBtn" onclick="showPage('fixtures')">
+
+  <button id="fixturesBtn"
+          onclick="showPage('fixtures')">
     Fixtures
   </button>
 
-  <button id="resultsBtn" onclick="showPage('results')">
-    Match Results
+  <button id="resultsBtn"
+          onclick="showPage('results')">
+    Results
   </button>
 
-  <button id="pointsBtn" onclick="showPage('points')">
-    Group Points
+  <button id="pointsBtn"
+          onclick="showPage('points')">
+    Points
   </button>
+
 </div>
 
 <div id="content">
-  <div class="loading">Loading...</div>
+  <div class="loading">
+    ডাটা লোড হচ্ছে...
+  </div>
 </div>
 
 <script>
 
+/* =================================
+   SUPABASE
+================================= */
+
 const SUPABASE_URL =
 "https://txfissofmkpfizavrpcp.supabase.co";
 
-
 /*
-  এখানে তোমার আগের আসল sb_publishable_... key বসাবে।
+   এখানে তোমার আসল Supabase
+   sb_publishable_... key বসাবে।
 */
+
 const SUPABASE_PUBLISHABLE_KEY =
-sb_publishable_SUQ_jBXrre6ClvPyxZBZxg_aYYIieEN";
+"sb_publishable_SUQ_jBXrre6ClvPyxZBZxg_aYYIieEN";
 
 
 const supabaseClient =
@@ -140,6 +235,10 @@ window.supabase.createClient(
 );
 
 
+/* =================================
+   DATA
+================================= */
+
 let groups = [];
 let teams = [];
 let matches = [];
@@ -148,13 +247,14 @@ let currentPage = "fixtures";
 let selectedTeam = "";
 
 
-/* =========================
-   ACTIVE TAB
-========================= */
+/* =================================
+   TAB
+================================= */
 
 function setActive(page){
 
-  document.querySelectorAll(".tabs button")
+  document
+    .querySelectorAll(".tabs button")
     .forEach(button => {
       button.classList.remove("active");
     });
@@ -179,9 +279,9 @@ function setActive(page){
 }
 
 
-/* =========================
-   PAGE CONTROL
-========================= */
+/* =================================
+   PAGE
+================================= */
 
 function showPage(page){
 
@@ -203,9 +303,9 @@ function showPage(page){
 }
 
 
-/* =========================
+/* =================================
    TEAM NAME
-========================= */
+================================= */
 
 function teamName(id){
 
@@ -219,9 +319,9 @@ function teamName(id){
 }
 
 
-/* =========================
+/* =================================
    GROUP NAME
-========================= */
+================================= */
 
 function groupName(id){
 
@@ -235,9 +335,9 @@ function groupName(id){
 }
 
 
-/* =========================
+/* =================================
    LOAD DATA
-========================= */
+================================= */
 
 async function loadData(){
 
@@ -246,18 +346,30 @@ async function loadData(){
 
   try{
 
+    content.innerHTML = `
+      <div class="loading">
+        ডাটা লোড হচ্ছে...
+      </div>
+    `;
+
+
+    /* GROUPS */
+
     const groupsResult =
       await supabaseClient
       .from("groups")
       .select("id,name,tournament_id")
       .order("name");
 
-    if(groupsResult.error)
+    if(groupsResult.error){
       throw groupsResult.error;
+    }
 
     groups =
       groupsResult.data || [];
 
+
+    /* TEAMS */
 
     const teamsResult =
       await supabaseClient
@@ -265,12 +377,15 @@ async function loadData(){
       .select("id,name,group_id")
       .order("name");
 
-    if(teamsResult.error)
+    if(teamsResult.error){
       throw teamsResult.error;
+    }
 
     teams =
       teamsResult.data || [];
 
+
+    /* MATCHES */
 
     const matchesResult =
       await supabaseClient
@@ -288,8 +403,9 @@ async function loadData(){
       `)
       .order("id");
 
-    if(matchesResult.error)
+    if(matchesResult.error){
       throw matchesResult.error;
+    }
 
     matches =
       matchesResult.data || [];
@@ -305,7 +421,7 @@ async function loadData(){
     content.innerHTML = `
       <div class="error">
 
-        <b>Data load হয়নি।</b>
+        <b>ডাটা লোড হয়নি।</b>
 
         <br><br>
 
@@ -317,9 +433,9 @@ async function loadData(){
 }
 
 
-/* =========================
+/* =================================
    FIXTURES
-========================= */
+================================= */
 
 function showFixtures(){
 
@@ -329,10 +445,7 @@ function showFixtures(){
 
       <h2>আমার Team</h2>
 
-      <select
-        id="teamFilter"
-        onchange="changeTeam(this.value)"
-      >
+      <select onchange="changeTeam(this.value)">
 
         <option value="">
           সব Team দেখাও
@@ -364,32 +477,45 @@ function showFixtures(){
   let fixtures =
     matches.filter(match => {
 
-      const isGroup =
-        match.stage === "group";
+      if(match.stage !== "group"){
+        return false;
+      }
 
-      const isUpcoming =
+      /*
+        যেসব ম্যাচ এখনো খেলা হয়নি
+      */
+
+      return (
         !match.status ||
         match.status === "scheduled" ||
         match.status === "upcoming" ||
-        match.status === "pending";
-
-      return isGroup && isUpcoming;
+        match.status === "pending"
+      );
 
     });
 
+
+  /* TEAM FILTER */
 
   if(selectedTeam){
 
     fixtures =
       fixtures.filter(match =>
 
-        String(match.team_a_id) === String(selectedTeam) ||
-        String(match.team_b_id) === String(selectedTeam)
+        String(match.team_a_id) ===
+        String(selectedTeam)
+
+        ||
+
+        String(match.team_b_id) ===
+        String(selectedTeam)
 
       );
 
   }
 
+
+  /* GROUP A-H */
 
   const groupList =
     [...groups].sort((a,b) =>
@@ -401,19 +527,21 @@ function showFixtures(){
 
     const groupMatches =
       fixtures.filter(match =>
-        String(match.group_id) === String(group.id)
+        String(match.group_id) ===
+        String(group.id)
       );
 
 
-    if(groupMatches.length === 0)
+    if(groupMatches.length === 0){
       return;
+    }
 
 
     html += `
 
       <div class="card">
 
-        <h2>
+        <h2 class="group-title">
           Group ${group.name}
         </h2>
 
@@ -426,37 +554,16 @@ function showFixtures(){
 
         <div class="match">
 
-          <div style="
-            font-size:18px;
-            font-weight:bold;
-            text-align:center;
-          ">
-
+          <div class="team">
             ${teamName(match.team_a_id)}
-
           </div>
 
-
-          <div style="
-            text-align:center;
-            color:#9ca3af;
-            margin:8px 0;
-            font-weight:bold;
-          ">
-
+          <div class="vs">
             VS
-
           </div>
 
-
-          <div style="
-            font-size:18px;
-            font-weight:bold;
-            text-align:center;
-          ">
-
+          <div class="team">
             ${teamName(match.team_b_id)}
-
           </div>
 
         </div>
@@ -475,7 +582,7 @@ function showFixtures(){
 
     html += `
 
-      <div class="card">
+      <div class="card empty">
 
         এই Team-এর কোনো Fixture নেই।
 
@@ -492,9 +599,9 @@ function showFixtures(){
 }
 
 
-/* =========================
-   TEAM CHANGE
-========================= */
+/* =================================
+   CHANGE TEAM
+================================= */
 
 function changeTeam(teamId){
 
@@ -504,9 +611,9 @@ function changeTeam(teamId){
 }
 
 
-/* =========================
+/* =================================
    RESULTS
-========================= */
+================================= */
 
 function showResults(){
 
@@ -516,12 +623,23 @@ function showResults(){
   const results =
     matches.filter(match =>
 
-      match.stage === "group" &&
+      match.stage === "group"
+
+      &&
 
       (
-        match.status === "completed" ||
-        match.status === "finished" ||
-        match.score_a !== null ||
+        match.status === "completed"
+
+        ||
+
+        match.status === "finished"
+
+        ||
+
+        match.score_a !== null
+
+        ||
+
         match.score_b !== null
       )
 
@@ -532,7 +650,7 @@ function showResults(){
 
     html = `
 
-      <div class="card">
+      <div class="card empty">
 
         এখনো কোনো Match Result নেই।
 
@@ -540,61 +658,44 @@ function showResults(){
 
     `;
 
-  }else{
+  }
 
 
-    results.forEach(match => {
+  results.forEach(match => {
 
-      html += `
+    html += `
 
-        <div class="card">
+      <div class="card">
 
-          <b>
-            Group ${groupName(match.group_id)}
-          </b>
+        <h2 class="group-title">
+          Group ${groupName(match.group_id)}
+        </h2>
 
+        <div class="match">
 
-          <div class="match">
+          <div class="team">
+            ${teamName(match.team_a_id)}
+          </div>
 
-            <div style="
-              text-align:center;
-              font-weight:bold;
-              font-size:18px;
-            ">
+          <div class="score">
 
-              ${teamName(match.team_a_id)}
+            ${match.score_a ?? 0}
+            -
+            ${match.score_b ?? 0}
 
-            </div>
+          </div>
 
-
-            <div class="score">
-
-              ${match.score_a ?? 0}
-              -
-              ${match.score_b ?? 0}
-
-            </div>
-
-
-            <div style="
-              text-align:center;
-              font-weight:bold;
-              font-size:18px;
-            ">
-
-              ${teamName(match.team_b_id)}
-
-            </div>
-
+          <div class="team">
+            ${teamName(match.team_b_id)}
           </div>
 
         </div>
 
-      `;
+      </div>
 
-    });
+    `;
 
-  }
+  });
 
 
   document
@@ -603,9 +704,9 @@ function showResults(){
 }
 
 
-/* =========================
+/* =================================
    GROUP POINTS
-========================= */
+================================= */
 
 function showPoints(){
 
@@ -614,10 +715,10 @@ function showPoints(){
 
   groups.forEach(group => {
 
-
     const groupTeams =
       teams.filter(team =>
-        String(team.group_id) === String(group.id)
+        String(team.group_id) ===
+        String(group.id)
       );
 
 
@@ -626,7 +727,7 @@ function showPoints(){
 
     groupTeams.forEach(team => {
 
-      table[team.id] = {
+      table[String(team.id)] = {
 
         name: team.name,
 
@@ -649,11 +750,18 @@ function showPoints(){
 
       .filter(match =>
 
-        String(match.group_id) === String(group.id) &&
+        String(match.group_id) ===
+        String(group.id)
 
-        match.stage === "group" &&
+        &&
 
-        match.score_a !== null &&
+        match.stage === "group"
+
+        &&
+
+        match.score_a !== null
+
+        &&
 
         match.score_b !== null
 
@@ -661,14 +769,15 @@ function showPoints(){
 
       .forEach(match => {
 
+        const aId =
+          String(match.team_a_id);
 
-        if(
-          !table[match.team_a_id] ||
-          !table[match.team_b_id]
-        ){
+        const bId =
+          String(match.team_b_id);
 
+
+        if(!table[aId] || !table[bId]){
           return;
-
         }
 
 
@@ -679,42 +788,35 @@ function showPoints(){
           Number(match.score_b);
 
 
-        table[match.team_a_id].played++;
-
-        table[match.team_b_id].played++;
+        table[aId].played++;
+        table[bId].played++;
 
 
         if(a > b){
 
-          table[match.team_a_id].win++;
+          table[aId].win++;
+          table[aId].points += 3;
 
-          table[match.team_a_id].points += 3;
-
-          table[match.team_b_id].loss++;
+          table[bId].loss++;
 
         }
-
 
         else if(b > a){
 
-          table[match.team_b_id].win++;
+          table[bId].win++;
+          table[bId].points += 3;
 
-          table[match.team_b_id].points += 3;
-
-          table[match.team_a_id].loss++;
+          table[aId].loss++;
 
         }
 
-
         else{
 
-          table[match.team_a_id].draw++;
+          table[aId].draw++;
+          table[bId].draw++;
 
-          table[match.team_b_id].draw++;
-
-          table[match.team_a_id].points++;
-
-          table[match.team_b_id].points++;
+          table[aId].points++;
+          table[bId].points++;
 
         }
 
@@ -732,41 +834,20 @@ function showPoints(){
 
       <div class="card">
 
-        <h2>
+        <h2 class="group-title">
           Group ${group.name}
         </h2>
 
-
-        <table style="
-          width:100%;
-          border-collapse:collapse;
-        ">
+        <table>
 
           <tr>
 
-            <th align="left">
-              Team
-            </th>
-
-            <th>
-              MP
-            </th>
-
-            <th>
-              W
-            </th>
-
-            <th>
-              D
-            </th>
-
-            <th>
-              L
-            </th>
-
-            <th>
-              Pts
-            </th>
+            <th>Team</th>
+            <th>MP</th>
+            <th>W</th>
+            <th>D</th>
+            <th>L</th>
+            <th>Pts</th>
 
           </tr>
 
@@ -779,36 +860,28 @@ function showPoints(){
 
         <tr>
 
-          <td style="
-            padding:8px 2px;
-          ">
-
+          <td>
             ${row.name}
-
           </td>
 
-          <td align="center">
+          <td>
             ${row.played}
           </td>
 
-          <td align="center">
+          <td>
             ${row.win}
           </td>
 
-          <td align="center">
+          <td>
             ${row.draw}
           </td>
 
-          <td align="center">
+          <td>
             ${row.loss}
           </td>
 
-          <td align="center">
-
-            <b>
-              ${row.points}
-            </b>
-
+          <td>
+            <b>${row.points}</b>
           </td>
 
         </tr>
@@ -833,7 +906,7 @@ function showPoints(){
 
     html = `
 
-      <div class="card">
+      <div class="card empty">
 
         কোনো Group পাওয়া যায়নি।
 
@@ -850,16 +923,61 @@ function showPoints(){
 }
 
 
-/* =========================
+/* =================================
+   QR CODE
+================================= */
+
+function showQR(){
+
+  const viewerURL =
+    window.location.href.split("?")[0];
+
+
+  const qrURL =
+    "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data="
+    +
+    encodeURIComponent(viewerURL);
+
+
+  document
+    .getElementById("content")
+    .innerHTML = `
+
+      <div class="card qr-box">
+
+        <h2>BCS Gamer Viewer QR</h2>
+
+        <p class="small">
+          এই QR Code স্ক্যান করলে
+          Tournament Viewer খুলবে।
+        </p>
+
+        <img
+          src="${qrURL}"
+          alt="BCS Gamer QR Code"
+        >
+
+        <p class="small">
+          QR Code-টি Team/Player-দের
+          দেওয়া যাবে।
+        </p>
+
+      </div>
+
+    `;
+}
+
+
+/* =================================
    START
-========================= */
+================================= */
 
 showPage("fixtures");
 
 loadData();
 
 
-/* প্রতি ১০ সেকেন্ডে নতুন ডাটা */
+/* প্রতি ১০ সেকেন্ডে ডাটা আপডেট */
 
 setInterval(
   loadData,
@@ -867,7 +985,7 @@ setInterval(
 );
 
 
-/* Service Worker */
+/* SERVICE WORKER */
 
 if("serviceWorker" in navigator){
 
