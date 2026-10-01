@@ -977,13 +977,45 @@ showPage("fixtures");
 loadData();
 
 
-/* প্রতি ১০ সেকেন্ডে ডাটা আপডেট */
+/* SUPABASE REALTIME */
 
-setInterval(
-  loadData,
-  10000
-);
-
+const realtimeChannel =
+  supabaseClient
+    .channel("bcs-gamer-live")
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "matches"
+      },
+      () => {
+        loadData();
+      }
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "teams"
+      },
+      () => {
+        loadData();
+      }
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "groups"
+      },
+      () => {
+        loadData();
+      }
+    )
+    .subscribe();
 
 /* SERVICE WORKER */
 
