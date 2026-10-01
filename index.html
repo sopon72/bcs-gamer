@@ -11,8 +11,14 @@ table{width:100%;border-collapse:collapse}th,td{padding:7px 4px;border-bottom:1p
 <header><h1>⚽ BCS Gamer</h1><div>Admin Tournament Control Panel</div></header>
 <div id="login" class="panel"><h2>🔐 Admin Login</h2><p class="small">ডেমো Admin PIN: <b>1234</b></p><input id="pin" type="password" placeholder="Admin PIN"><br><br><button class="primary" onclick="login()">Login</button><p id="loginmsg"></p></div>
 <div id="app" style="display:none"><div class="tabs" id="tabs"></div><main id="main"></main></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+const SUPABASE_URL = "https://txfissofmkpfizavrpcp.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "PASTE_YOUR_PUBLISHABLE_KEY_HERE";
 let supabaseClient = null;
+if (SUPABASE_URL.startsWith("http") && !SUPABASE_PUBLISHABLE_KEY.includes("PASTE_YOUR")) {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+}
 const groups="ABCDEFGH".split(""), teams={}; groups.forEach((g,gi)=>teams[g]=Array.from({length:4},(_,i)=>`Team ${gi*4+i+1}`));
 let data=JSON.parse(localStorage.getItem("bcs_admin")||"null")||{teams,results:{},announcement:"",tournament:"BCS Gamer Tournament"};
 function save(){localStorage.setItem("bcs_admin",JSON.stringify(data))}
@@ -24,7 +30,10 @@ async function init(){
     b.onclick=()=>show(p); b.dataset.p=p;
     if(i===0)b.className="active"; tabs.appendChild(b);
   });
-  if(typeof supabaseClient !== "undefined" && supabaseClient) await loadTeamsFromSupabase();
+  if(typeof supabaseClient !== "undefined" && supabaseClient){
+    await loadTeamsFromSupabase();
+    await loadResultsFromSupabase();
+  }
   show("dashboard");
 }
 async function loadTeamsFromSupabase(){
@@ -59,6 +68,42 @@ function saveTeams(g){data.teams[g]=[0,1,2,3].map(i=>document.getElementById(g+i
 function fixtures(){let a=[];for(let g of groups){let t=data.teams[g];[[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]].forEach((p,i)=>a.push({id:g+(i+1),g,a:t[p[0]],b:t[p[1]]}))}return a}
 function fixturePage(){main.innerHTML=`<section class=panel><h2>📅 Fixtures</h2><p class=small>প্রতি গ্রুপে ৬টি ম্যাচ। তারিখ/সময় এখন ডেমো হিসেবে রাখা হয়েছে।</p></section><div class=grid>`+groups.map(g=>`<section class=card><h3>Group ${g}</h3>${fixtures().filter(x=>x.g===g).map(x=>`<div class=match><b>${x.a}</b> vs <b>${x.b}</b><div class=small>Match ${x.id.slice(1)}</div></div>`).join("")}</section>`).join("")+"</div>"}
 function resultPage(){let f=fixtures();main.innerHTML=`<section class=panel><h2>📝 ম্যাচের ফলাফল</h2><p class=small>ম্যাচ শেষ হওয়ার পর Score দিয়ে Save Result চাপুন। জয়=৩, ড্র=১, হার=০।</p><p class="msg">✅ ফলাফল Save হলে পয়েন্ট টেবিল সঙ্গে সঙ্গে আপডেট হবে।</p></section><div class=grid>`+f.map(x=>{let r=data.results[x.id]||{};return `<section class=card><h3>Group ${x.g} • Match ${x.id.slice(1)}</h3><div class=row><b>${x.a}</b><input type=number min=0 id="${x.id}a" value="${r.a??''}"><input type=number min=0 id="${x.id}b" value="${r.b??''}"><b>${x.b}</b></div><br><button class=primary onclick="saveResult('${x.id}')">Save Result</button></section>`}).join("")+"</div>"}
+async function loadResultsFromSupabase(){
+  try{
+    const {data: rows,error}=await supabaseClient
+      .from("matches")
+      .select("id,group_id,team_a_id,team_b_id,score_a,score_b,status");
+    if(error) throw error;
+    const {data: groupsRows,error:gErr}=await supabaseClient
+      .from("groups")
+      .select("id,name,teams(id,name,group_id)")
+      .order("name");
+    if(gErr) throw gErr;
+    const remote={};
+    (groupsRows||[]).forEach(group=>{
+      const g=String(group.name).trim().toUpperCase();
+      if(!/^[A-H]$/.test(g)) return;
+      const names={};
+      (group.teams||[]).forEach(t=>names[t.id]=t.name);
+      (rows||[]).filter(m=>m.group_id===group.id && m.status==="completed" &&
+        m.score_a!==null && m.score_b!==null).forEach(m=>{
+          const aName=names[m.team_a_id], bName=names[m.team_b_id];
+          if(!aName || !bName) return;
+          const fx=fixtures().find(x=>x.g===g &&
+            ((x.a===aName && x.b===bName)||(x.a===bName && x.b===aName)));
+          if(!fx) return;
+          remote[fx.id]=(fx.a===aName)
+            ? {a:Number(m.score_a),b:Number(m.score_b)}
+            : {a:Number(m.score_b),b:Number(m.score_a)};
+        });
+    });
+    data.results={...data.results,...remote};
+    save();
+  }catch(err){
+    console.warn("Supabase result load failed; using local data.",err);
+  }
+}
+
 async function saveResult(id){
   let a=Number(document.getElementById(id+"a").value),b=Number(document.getElementById(id+"b").value);
   if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0){alert("দুই দলের Score দিন");return}
