@@ -218,67 +218,110 @@ async function loadData(){
 
 let currentPage = "fixtures";
 
-function showPage(page){
-
-  currentPage = page;
-
-  setActive(page);
-
-  const content = document.getElementById("content");
-
-  if(page === "fixtures")
-    showFixtures();
-
-  if(page === "results")
-    showResults();
-
-  if(page === "points")
-    showPoints();
-}
-
 function showFixtures(){
 
-  let html = "";
+  let html = `
+    <div class="card">
+      <h2>আমার Team</h2>
 
-  const fixtures =
-    matches.filter(m =>
-      m.stage === "group" &&
-      (!m.status ||
-       m.status === "scheduled" ||
-       m.status === "upcoming" ||
-       m.status === "pending")
+      <select id="teamFilter"
+        onchange="showFixtures()"
+        style="width:100%;padding:12px;border-radius:8px;font-size:16px;">
+
+        <option value="">সব Team দেখাও</option>
+
+        ${teams.map(t =>
+          `<option value="${t.id}">
+            ${t.name} — Group ${groupName(t.group_id)}
+          </option>`
+        ).join("")}
+
+      </select>
+    </div>
+  `;
+
+  const selected =
+    document.getElementById("teamFilter")?.value || "";
+
+  let fixtures = matches.filter(m =>
+    m.stage === "group" &&
+    (!m.status ||
+     m.status === "scheduled" ||
+     m.status === "upcoming" ||
+     m.status === "pending")
+  );
+
+  if(selected){
+    fixtures = fixtures.filter(m =>
+      m.team_a_id === selected ||
+      m.team_b_id === selected
     );
+  }
 
-  if(fixtures.length === 0){
+  const groupList = [...groups].sort((a,b) =>
+    a.name.localeCompare(b.name)
+  );
 
-    html = `
+  groupList.forEach(group => {
+
+    const groupMatches =
+      fixtures.filter(m => m.group_id === group.id);
+
+    if(groupMatches.length === 0) return;
+
+    html += `
       <div class="card">
-        কোনো Fixture পাওয়া যায়নি।
-      </div>
+        <h2>Group ${group.name}</h2>
     `;
 
-  }else{
-
-    fixtures.forEach(m => {
+    groupMatches.forEach(m => {
 
       html += `
-        <div class="card">
-          <b>${groupName(m.group_id)}</b>
+        <div class="match"
+          style="
+            background:#111827;
+            padding:15px;
+            margin:10px 0;
+            border-radius:10px;
+          ">
 
-          <div class="match">
+          <div style="font-size:18px;font-weight:bold;">
             ${teamName(m.team_a_id)}
-            <br>
-            <span class="small">VS</span>
-            <br>
+          </div>
+
+          <div style="
+            text-align:center;
+            color:#9ca3af;
+            margin:8px 0;
+            font-weight:bold;
+          ">
+            VS
+          </div>
+
+          <div style="font-size:18px;font-weight:bold;">
             ${teamName(m.team_b_id)}
           </div>
+
         </div>
       `;
 
     });
+
+    html += `</div>`;
+
+  });
+
+  if(fixtures.length === 0){
+
+    html += `
+      <div class="card">
+        এই Team-এর কোনো Fixture নেই।
+      </div>
+    `;
+
   }
 
-  content.innerHTML = html;
+  document.getElementById("content").innerHTML = html;
 }
 
 function showResults(){
