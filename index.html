@@ -14,9 +14,9 @@ table{width:100%;border-collapse:collapse}th,td{padding:7px 4px;border-bottom:1p
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL = "https://txfissofmkpfizavrpcp.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "PASTE_YOUR_PUBLISHABLE_KEY_HERE";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_SUQ_jBXrre6ClvPyxZBZxg_aYYIieEN";
 let supabaseClient = null;
-if (SUPABASE_URL.startsWith("http") && !SUPABASE_PUBLISHABLE_KEY.includes("PASTE_YOUR")) {
+if (SUPABASE_URL.startsWith("http") && SUPABASE_PUBLISHABLE_KEY.startsWith("sb_publishable_")) {
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 }
 const groups="ABCDEFGH".split(""), teams={}; groups.forEach((g,gi)=>teams[g]=Array.from({length:4},(_,i)=>`Team ${gi*4+i+1}`));
@@ -61,7 +61,7 @@ function nav(p){document.querySelectorAll(".tabs button").forEach(x=>x.classList
 function show(p){nav(p);if(p==="dashboard")dashboard();if(p==="teams")teamPage();if(p==="fixtures")fixturePage();if(p==="results")resultPage();if(p==="groupPoints")groupPointsPage();if(p==="announcement")announcePage()}
 function dashboard(){main.innerHTML=`<section class=panel><h2>🏆 ${data.tournament}</h2><div class=grid>
 <div class=card><h3>Teams</h3><b>32</b></div><div class=card><h3>Groups</h3><b>8</b></div><div class=card><h3>Group Matches</h3><b>48</b></div><div class=card><h3>Knockout</h3><b>R16 → QF → SF → Final</b></div></div>
-<p class=small>এই Prototype-এ তথ্য এই ডিভাইসের browser-এ সংরক্ষিত হবে।</p></section>`}
+<p class=small>ফলাফল Supabase-এও সংরক্ষণ হবে, তাই অন্য ডিভাইস থেকেও দেখা যাবে।</p></section>`}
 function teamPage(){let h=`<section class=panel><h2>👥 Team Management</h2><p class=small>নাম পরিবর্তন করে Save করলে Group Table ও Fixture-এ নতুন নাম দেখা যাবে।</p></section><div class=grid>`;
 for(let g of groups){h+=`<section class=card><h3>Group ${g}</h3>`;data.teams[g].forEach((t,i)=>h+=`<label>Team ${i+1}<input id="${g}${i}" value="${esc(t)}"></label><br>`);h+=`<button class=primary onclick="saveTeams('${g}')">Save Group ${g}</button></section>`}main.innerHTML=h+"</div>"}
 function saveTeams(g){data.teams[g]=[0,1,2,3].map(i=>document.getElementById(g+i).value.trim()||`Team ${i+1}`);save();teamPage()}
