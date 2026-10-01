@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCS Gamer Admin</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#07111f;color:#fff;font-family:Arial,sans-serif}header{padding:18px;text-align:center;background:linear-gradient(135deg,#123b73,#087f5b)}
+h1{margin:0}main{max-width:1100px;margin:auto;padding:14px}.panel,.card{background:#111c2d;border-radius:14px;padding:15px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+input,select,button{font:inherit;border-radius:8px;padding:10px;border:1px solid #334155}input,select{width:100%;background:#0b1525;color:#fff}button{cursor:pointer;background:#243047;color:#fff}button.primary{background:#10b981;color:#03251b;border:0;font-weight:bold}.danger{background:#7f1d1d}.tabs{display:flex;gap:7px;overflow:auto;padding:8px;background:#0d1727;position:sticky;top:0;z-index:4}.tabs button{white-space:nowrap}.tabs button.active{background:#10b981;color:#05271e}
+table{width:100%;border-collapse:collapse}th,td{padding:7px 4px;border-bottom:1px solid #334155;text-align:center}th{color:#a7f3d0}.left{text-align:left}.ok{color:#6ee7b7}.small{font-size:13px;color:#9ca3af}.match{padding:10px;border-bottom:1px solid #334155}.row{display:grid;grid-template-columns:1fr 65px 1fr;gap:6px;align-items:center}.row input{text-align:center}.msg{padding:10px;border-radius:8px;background:#123524;color:#a7f3d0;margin-bottom:10px}
+#login{max-width:420px;margin:50px auto;padding:20px}
+</style></head><body>
+<header><h1>⚽ BCS Gamer</h1><div>Admin Tournament Control Panel</div></header>
+<div id="login" class="panel"><h2>🔐 Admin Login</h2><p class="small">ডেমো Admin PIN: <b>1234</b></p><input id="pin" type="password" placeholder="Admin PIN"><br><br><button class="primary" onclick="login()">Login</button><p id="loginmsg"></p></div>
+<div id="app" style="display:none"><div class="tabs" id="tabs"></div><main id="main"></main></div>
+<script>
+let supabaseClient = null;
+const groups="ABCDEFGH".split(""), teams={}; groups.forEach((g,gi)=>teams[g]=Array.from({length:4},(_,i)=>`Team ${gi*4+i+1}`));
+let data=JSON.parse(localStorage.getItem("bcs_admin")||"null")||{teams,results:{},announcement:"",tournament:"BCS Gamer Tournament"};
+function save(){localStorage.setItem("bcs_admin",JSON.stringify(data))}
+function login(){if(document.getElementById("pin").value==="1234"){document.getElementById("login").style.display="none";document.getElementById("app").style.display="block";init()}else document.getElementById("loginmsg").textContent="ভুল PIN";}
+async function init(){
+  ["dashboard","teams","fixtures","results","groupPoints","announcement"].forEach((p,i)=>{
+    let b=document.createElement("button");
+    b.textContent={dashboard:"Dashboard",teams:"Teams",fixtures:"Fixtures",results:"Match Results",announcement:"Announcement",groupPoints:"Group Points"}[p];
+    b.onclick=()=>show(p); b.dataset.p=p;
+    if(i===0)b.className="active"; tabs.appendChild(b);
+  });
+  if(typeof supabaseClient !== "undefined" && supabaseClient) await loadTeamsFromSupabase();
+  show("dashboard");
+}
+async function loadTeamsFromSupabase(){
+  try{
+    const {data: rows,error}=await supabaseClient
+      .from("groups")
+      .select("id,name,teams(id,name,group_id)")
+      .order("name");
+    if(error) throw error;
+    if(rows && rows.length){
+      const fresh={};
+      rows.forEach(group=>{
+        const g=String(group.name).trim().toUpperCase();
+        if(!/^[A-H]$/.test(g)) return;
+        fresh[g]=(group.teams||[]).sort((a,b)=>String(a.name).localeCompare(String(b.name))).map(t=>t.name);
+      });
+      groups.forEach(g=>{ if(!fresh[g]) fresh[g]=[]; });
+      data.teams=fresh;
+    }
+  }catch(err){
+    console.warn("Supabase team load failed; using local data.",err);
+  }
+}
+function nav(p){document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("active",x.dataset.p===p))}
+function show(p){nav(p);if(p==="dashboard")dashboard();if(p==="teams")teamPage();if(p==="fixtures")fixturePage();if(p==="results")resultPage();if(p==="groupPoints")groupPointsPage();if(p==="announcement")announcePage()}
+function dashboard(){main.innerHTML=`<section class=panel><h2>🏆 ${data.tournament}</h2><div class=grid>
+<div class=card><h3>Teams</h3><b>32</b></div><div class=card><h3>Groups</h3><b>8</b></div><div class=card><h3>Group Matches</h3><b>48</b></div><div class=card><h3>Knockout</h3><b>R16 → QF → SF → Final</b></div></div>
+<p class=small>এই Prototype-এ তথ্য এই ডিভাইসের browser-এ সংরক্ষিত হবে।</p></section>`}
+function teamPage(){let h=`<section class=panel><h2>👥 Team Management</h2><p class=small>নাম পরিবর্তন করে Save করলে Group Table ও Fixture-এ নতুন নাম দেখা যাবে।</p></section><div class=grid>`;
+for(let g of groups){h+=`<section class=card><h3>Group ${g}</h3>`;data.teams[g].forEach((t,i)=>h+=`<label>Team ${i+1}<input id="${g}${i}" value="${esc(t)}"></label><br>`);h+=`<button class=primary onclick="saveTeams('${g}')">Save Group ${g}</button></section>`}main.innerHTML=h+"</div>"}
+function saveTeams(g){data.teams[g]=[0,1,2,3].map(i=>document.getElementById(g+i).value.trim()||`Team ${i+1}`);save();teamPage()}
+function fixtures(){let a=[];for(let g of groups){let t=data.teams[g];[[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]].forEach((p,i)=>a.push({id:g+(i+1),g,a:t[p[0]],b:t[p[1]]}))}return a}
+function fixturePage(){main.innerHTML=`<section class=panel><h2>📅 Fixtures</h2><p class=small>প্রতি গ্রুপে ৬টি ম্যাচ। তারিখ/সময় এখন ডেমো হিসেবে রাখা হয়েছে।</p></section><div class=grid>`+groups.map(g=>`<section class=card><h3>Group ${g}</h3>${fixtures().filter(x=>x.g===g).map(x=>`<div class=match><b>${x.a}</b> vs <b>${x.b}</b><div class=small>Match ${x.id.slice(1)}</div></div>`).join("")}</section>`).join("")+"</div>"}
+function resultPage(){let f=fixtures();main.innerHTML=`<section class=panel><h2>📝 ম্যাচের ফলাফল</h2><p class=small>ম্যাচ শেষ হওয়ার পর Score দিয়ে Save Result চাপুন। জয়=৩, ড্র=১, হার=০।</p><p class="msg">✅ ফলাফল Save হলে পয়েন্ট টেবিল সঙ্গে সঙ্গে আপডেট হবে।</p></section><div class=grid>`+f.map(x=>{let r=data.results[x.id]||{};return `<section class=card><h3>Group ${x.g} • Match ${x.id.slice(1)}</h3><div class=row><b>${x.a}</b><input type=number min=0 id="${x.id}a" value="${r.a??''}"><input type=number min=0 id="${x.id}b" value="${r.b??''}"><b>${x.b}</b></div><br><button class=primary onclick="saveResult('${x.id}')">Save Result</button></section>`}).join("")+"</div>"}
+async function saveResult(id){
+  let a=Number(document.getElementById(id+"a").value),b=Number(document.getElementById(id+"b").value);
+  if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0){alert("দুই দলের Score দিন");return}
+  data.results[id]={a,b}; save();
+  resultPage();
+  if(typeof supabaseClient !== "undefined" && supabaseClient){
+    const m=fixtures().find(x=>x.id===id);
+    try{
+      const {data: groupsRows,error:gErr}=await supabaseClient
+        .from("groups").select("id,name,tournament_id,teams(id,name,group_id)");
+      if(gErr) throw gErr;
+      const groupRow=(groupsRows||[]).find(g=>String(g.name).trim().toUpperCase()===m.g);
+      if(!groupRow) throw new Error("Group not found in Supabase");
+      const teamA=(groupRow.teams||[]).find(t=>t.name===m.a);
+      const teamB=(groupRow.teams||[]).find(t=>t.name===m.b);
+      if(!teamA||!teamB) throw new Error("Teams not found in Supabase");
+      const {data: matchRows,error:mErr}=await supabaseClient
+        .from("matches")
+        .select("*")
+        .eq("group_id",groupRow.id)
+        .eq("stage","group");
+      if(mErr) throw mErr;
+      const matchRow=(matchRows||[]).find(x=>
+        (x.team_a_id===teamA.id && x.team_b_id===teamB.id) ||
+        (x.team_a_id===teamB.id && x.team_b_id===teamA.id)
+      );
+      if(!matchRow) throw new Error("Matching match row not found");
+      const patch={score_a:a,score_b:b,status:"completed"};
+      if(matchRow.team_a_id===teamB.id && matchRow.team_b_id===teamA.id){
+        patch.score_a=b; patch.score_b=a;
+      }
+      const {error:uErr}=await supabaseClient.from("matches").update(patch).eq("id",matchRow.id);
+      if(uErr) throw uErr;
+      console.log("Score Supabase-এও Save হয়েছে", id);
+    }catch(err){
+      console.error("Supabase sync failed:", err);
+      // Local result is already shown immediately; Supabase sync can be retried later.
+    }
+  }
+}
+function stats(g){let s={};data.teams[g].forEach(t=>s[t]={mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0});fixtures().filter(x=>x.g===g).forEach(x=>{let r=data.results[x.id];if(!r)return;let A=s[x.a],B=s[x.b];A.mp++;B.mp++;A.gf+=r.a;A.ga+=r.b;B.gf+=r.b;B.ga+=r.a;if(r.a>r.b){A.w++;A.pts+=3;B.l++}else if(r.a<r.b){B.w++;B.pts+=3;A.l++}else{A.d++;B.d++;A.pts++;B.pts++}});return s}
+function table(g){let s=stats(g),arr=Object.entries(s).map(([team,v])=>({team,...v})).sort((a,b)=>b.pts-a.pts||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf);return `<h3>Group ${g}</h3><table><tr><th>#</th><th class=left>Team</th><th>MP</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>`+arr.map((x,i)=>`<tr class="${i<2?'ok':''}"><td>${i+1}</td><td class=left>${esc(x.team)}</td><td>${x.mp}</td><td>${x.w}</td><td>${x.d}</td><td>${x.l}</td><td>${x.gf-x.ga}</td><td><b>${x.pts}</b></td></tr>`).join("")+"</table>"}
+function groupPointsPage(){
+  main.innerHTML=`<section class=panel>
+    <h2>📊 Group Points</h2>
+    <p class=small>Match Results-এর ফলাফল অনুযায়ী পয়েন্ট এখানে আলাদাভাবে দেখা যাবে।</p>
+  </section><div class=grid>`+
+  groups.map(g=>`<section class=card>${table(g)}</section>`).join("")+
+  `</div>`;
+}
+function announcePage(){main.innerHTML=`<section class=panel><h2>📢 Announcement</h2><textarea id=ann style="width:100%;min-height:150px;background:#0b1525;color:#fff;border:1px solid #334155;border-radius:8px;padding:10px">${esc(data.announcement)}</textarea><br><br><button class=primary onclick="saveAnn()">Publish Announcement</button></section><section class=panel><h3>Public Announcement Preview</h3><p>${esc(data.announcement)||"কোনো Announcement নেই।"}</p></section>`}
+function saveAnn(){data.announcement=document.getElementById("ann").value;save();announcePage()}
+function esc(s){return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
+</script></body></html>
