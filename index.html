@@ -30,6 +30,24 @@ const DEFAULT_COUNTRIES=[
   ["🇳🇿","New Zealand"],
   ["🇦🇹","Austria"],["🇧🇪","Belgium"],["🇧🇦","Bosnia and Herzegovina"],["🇭🇷","Croatia"],["🇨🇿","Czechia"],["🏴","England"],["🇫🇷","France"],["🇩🇪","Germany"],["🇳🇱","Netherlands"],["🇳🇴","Norway"],["🇵🇹","Portugal"],["🏴","Scotland"],["🇪🇸","Spain"],["🇸🇪","Sweden"],["🇨🇭","Switzerland"],["🇹🇷","Türkiye"]
 ];
+function login(){
+  const pin=(document.getElementById("pin")?.value||"").trim();
+  const msg=document.getElementById("loginmsg");
+  if(pin!=="1234"){if(msg)msg.textContent="ভুল PIN";return;}
+  document.getElementById("login").style.display="none";
+  document.getElementById("app").style.display="block";
+  initAdmin();
+}
+async function initAdmin(){
+  tabs.innerHTML="";
+  const pages=["dashboard","teams","fixtures","results","groupPoints","knockout","goalRanking","topScorers","announcement"];
+  const labels={dashboard:"Dashboard",teams:"Teams",fixtures:"Fixtures",results:"Match Results",groupPoints:"Group Points",knockout:"🏆 Knockout",goalRanking:"⚽ Goal Ranking",topScorers:"Top Scorers",announcement:"Announcement"};
+  pages.forEach((p,i)=>{const b=document.createElement("button");b.textContent=labels[p];b.dataset.p=p;b.onclick=()=>show(p);if(i===0)b.className="active";tabs.appendChild(b)});
+  try{
+    if(supabaseClient){await loadTeamsFromSupabase();await syncMatchesFromTeams();await loadResultsFromSupabase();await seedDefaultFlags();}
+  }catch(e){console.warn("Initial sync failed",e)}
+  show("dashboard");
+}
 async function seedDefaultFlags(){
   if(!supabaseClient)return;
   try{
