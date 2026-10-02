@@ -20,7 +20,7 @@ const activeGroupCount=()=>data.tournamentSize/4;
 const groups=()=>ALL_GROUPS.slice(0,activeGroupCount());
 const defaultTeams={};ALL_GROUPS.forEach((g,gi)=>defaultTeams[g]=Array.from({length:4},(_,i)=>`Team ${gi*4+i+1}`));
 ALL_GROUPS.forEach(g=>{if(!data.teams[g])data.teams[g]=defaultTeams[g]});
-data.drawDone=!!data.drawDone;data.status=data.status||"active";data.knockout=data.knockout||{};data.teamMeta=data.teamMeta||{};data.players=data.players||{};data.goalEvents=data.goalEvents||[];
+data.drawDone=!!data.drawDone;data.status=data.status||"active";data.knockout=data.knockout||{};data.teamMeta=data.teamMeta||{};data.teamMetaById=data.teamMetaById||{};data.players=data.players||{};data.goalEvents=data.goalEvents||[];data.teamIds=data.teamIds||{};
 const DEFAULT_COUNTRIES=[
   ["🇧🇩","Bangladesh"],["🇨🇦","Canada"],["🇲🇽","Mexico"],["🇺🇸","USA"],
   ["🇦🇺","Australia"],["🇮🇶","Iraq"],["🇮🇷","Iran"],["🇯🇵","Japan"],["🇯🇴","Jordan"],["🇰🇷","South Korea"],["🇶🇦","Qatar"],["🇸🇦","Saudi Arabia"],
@@ -30,23 +30,166 @@ const DEFAULT_COUNTRIES=[
   ["🇳🇿","New Zealand"],
   ["🇦🇹","Austria"],["🇧🇪","Belgium"],["🇧🇦","Bosnia and Herzegovina"],["🇭🇷","Croatia"],["🇨🇿","Czechia"],["🏴","England"],["🇫🇷","France"],["🇩🇪","Germany"],["🇳🇱","Netherlands"],["🇳🇴","Norway"],["🇵🇹","Portugal"],["🏴","Scotland"],["🇪🇸","Spain"],["🇸🇪","Sweden"],["🇨🇭","Switzerland"],["🇹🇷","Türkiye"]
 ];
-async function seedDefaultFlags(){const all=[];groups().forEach(g=>(data.teams[g]||[]).forEach(t=>all.push(t)));all.slice(0,data.tournamentSize).forEach((team,i)=>{const old=data.teamMeta[team]||{};data.teamMeta[team]={flag:old.flag||((DEFAULT_COUNTRIES[i]||["🏳️","Unknown"])[0]),country:old.country||((DEFAULT_COUNTRIES[i]||["🏳️","Unknown"])[1])}});save();if(supabaseClient){try{const {data:rows,error}=await supabaseClient.from("teams").select("id,name,country,flag").limit(100);if(error)throw error;const active=new Set(all);for(const t of (rows||[])){if(!active.has(t.name))continue;const m=data.teamMeta[t.name]||{};if(!t.country||!t.flag){const {error:e}=await supabaseClient.from("teams").update({country:m.country||null,flag:m.flag||null}).eq("id",t.id);if(e)throw e}}}catch(e){console.warn(e)}}}
-function save(){localStorage.setItem("bcs_admin",JSON.stringify(data))}
-function login(){if(document.getElementById("pin").value==="1234"){document.getElementById("login").style.display="none";document.getElementById("app").style.display="block";init()}else document.getElementById("loginmsg").textContent="ভুল PIN"}
-async function init(){
- tabs.innerHTML="";["dashboard","teams","fixtures","results","groupPoints","knockout","topScorers","announcement"].forEach((p,i)=>{let b=document.createElement("button");b.textContent={dashboard:"Dashboard",teams:"Teams",fixtures:"Fixtures",results:"Match Results",groupPoints:"Group Points",knockout:"🏆 Knockout",topScorers:"⚽ Top Scorers",announcement:"Announcement"}[p];b.onclick=()=>show(p);b.dataset.p=p;if(i===0)b.className="active";tabs.appendChild(b)});
- if(supabaseClient){await loadTeamsFromSupabase();await loadResultsFromSupabase()}seedDefaultFlags();show("dashboard")
+async function seedDefaultFlags(){
+  if(!supabaseClient)return;
+  try{
+    const {data:rows,error}=await supabaseClient.from("teams").select("id,name,group_id,country,flag").order("id");
+    if(error)throw error;
+    const ordered=(rows||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+    const used=new Set(), fallback=DEFAULT_COUNTRIES.slice();
+    for(let i=0;i<ordered.length;i++){
+      const t=ordered[i];
+      let country=t.country||"",flag=t.flag||"";
+      if(!country||used.has(country)){
+        const c=fallback.find(x=>!used.has(x[1]))||["🏳️","Unknown"];
+        country=c[1];flag=c[0];
+      }
+      used.add(country);
+      if(t.country!==country||t.flag!==flag){
+        const {error:e}=await supabaseClient.from("teams").update({country,flag}).eq("id",t.id);
+        if(e)throw e;
+      }
+      data.teamMetaById[t.id]={country,flag};
+    }
+    save();
+  }catch(e){console.warn("Flag seed:",e)}
 }
-async function loadTeamsFromSupabase(){try{const {data:rows,error}=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id,country,flag)").order("name");if(error)throw error;if(rows&&rows.length){const fresh={};const meta={};rows.forEach(group=>{const g=String(group.name).trim().toUpperCase();if(/^[A-L]$/.test(g)){const ts=(group.teams||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));fresh[g]=ts.map(t=>t.name);ts.forEach(t=>{meta[t]={country:t.country||"Unknown",flag:t.flag||"🏳️"}})}});groups().forEach(g=>{if(!fresh[g])fresh[g]=[]});data.teams=fresh;data.teamMeta={...data.teamMeta,...meta};save()}}catch(e){console.warn(e)}}
-async function loadResultsFromSupabase(){try{const {data:rows,error}=await supabaseClient.from("matches").select("id,group_id,team_a_id,team_b_id,score_a,score_b,status,stage,groups(name,teams(id,name))").eq("stage","group");if(error)throw error;const out={};(rows||[]).forEach(m=>{if(m.status!=="completed"||m.score_a===null||m.score_b===null)return;const g=String(m.groups?.name||"").trim().toUpperCase();const ts=m.groups?.teams||[];const A=ts.find(t=>t.id===m.team_a_id),B=ts.find(t=>t.id===m.team_b_id);if(g&&A&&B){const x=fixtures().find(z=>z.g===g&&z.a===A.name&&z.b===B.name);if(x)out[x.id]={a:Number(m.score_a),b:Number(m.score_b)}}});data.results=out;save()}catch(e){console.warn(e)}}
+
+function metaForId(id){return data.teamMetaById?.[id]||{country:"Unknown",flag:"🏳️"}}
+function teamIdAt(g,i){return (data.teamIds?.[g]||[])[i]||null}
+async function normalizeGroups(){
+  if(!supabaseClient)return;
+  const {data:gs,error:ge}=await supabaseClient.from("groups").select("id,name,tournament_id,teams(id,name,group_id)").order("name");
+  if(ge)throw ge;
+  const byName={};(gs||[]).forEach(g=>byName[String(g.name).trim().toUpperCase()]=g);
+  const active=groups(), activeSet=new Set(active);
+  const slots=[];
+  active.forEach(g=>{
+    const ts=(byName[g]?.teams||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+    for(let i=4;i<ts.length;i++)slots.push(ts[i]);
+    for(let i=ts.length;i<4;i++)slots.push({__need:g});
+  });
+  const extras=slots.filter(x=>!x.__need), needs=slots.filter(x=>x.__need);
+  for(let i=0;i<needs.length&&i<extras.length;i++){
+    const target=byName[needs[i].__need]?.id,t=extras[i];
+    if(target){const {error}=await supabaseClient.from("teams").update({group_id:target}).eq("id",t.id);if(error)throw error;}
+    extras[i]=null;
+  }
+  const remaining=extras.filter(Boolean);
+  if(remaining.length){
+    const inactive=(gs||[]).filter(g=>!activeSet.has(String(g.name).trim().toUpperCase())).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+    if(inactive.length){
+      let j=0;for(const t of remaining){const target=inactive[j%inactive.length].id;const {error}=await supabaseClient.from("teams").update({group_id:target}).eq("id",t.id);if(error)throw error;j++;}
+    }
+  }
+  if(needs.length>extras.length){
+    const inactive=(gs||[]).filter(g=>!activeSet.has(String(g.name).trim().toUpperCase())).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+    const pool=[];inactive.forEach(g=>(g.teams||[]).forEach(t=>pool.push(t)));
+    let p=0;for(let i=extras.length;i<needs.length&&p<pool.length;i++,p++){const target=byName[needs[i].__need]?.id;const t=pool[p];if(target){const {error}=await supabaseClient.from("teams").update({group_id:target}).eq("id",t.id);if(error)throw error;}}
+  }
+}
+
+async function loadTeamsFromSupabase(){
+ await normalizeGroups();
+ const {data:rows,error}=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id,country,flag)").order("name");
+ if(error)throw error;
+ const fresh={},ids={},meta={};
+ (rows||[]).forEach(group=>{
+   const g=String(group.name).trim().toUpperCase();
+   if(!/^[A-L]$/.test(g))return;
+   const ts=(group.teams||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id))).slice(0,4);
+   fresh[g]=ts.map(t=>t.name);ids[g]=ts.map(t=>t.id);
+   ts.forEach(t=>{meta[t.id]={country:t.country||"Unknown",flag:t.flag||"🏳️"};data.teamMetaById[t.id]=meta[t.id]});
+ });
+ groups().forEach(g=>{if(!fresh[g])fresh[g]=[];if(!ids[g])ids[g]=[]});
+ data.teams=fresh;data.teamIds=ids;data.teamMetaById={...data.teamMetaById,...meta};save();
+}
+
+async function loadResultsFromSupabase(){
+ const {data:rows,error}=await supabaseClient.from("matches").select("id,group_id,team_a_id,team_b_id,score_a,score_b,status,stage,groups(name,teams(id,name))").eq("stage","group");
+ if(error)throw error;
+ const out={};
+ (rows||[]).forEach(m=>{
+   if(m.status!=="completed"||m.score_a===null||m.score_b===null)return;
+   const g=String(m.groups?.name||"").trim().toUpperCase();
+   const ts=m.groups?.teams||[];
+   const A=ts.find(t=>t.id===m.team_a_id),B=ts.find(t=>t.id===m.team_b_id);
+   if(!g||!A||!B)return;
+   const x=fixtures().find(z=>z.g===g&&((z.a===A.name&&z.b===B.name)||(z.a===B.name&&z.b===A.name)));
+   if(x){
+     if(x.a===A.name) out[x.id]={a:Number(m.score_a),b:Number(m.score_b)};
+     else out[x.id]={a:Number(m.score_b),b:Number(m.score_a)};
+   }
+ });
+ data.results=out;save();
+}
+async function syncMatchesFromTeams(){
+ if(!supabaseClient)return;
+ const {data:ms,error:me}=await supabaseClient.from("matches").select("id,group_id,team_a_id,team_b_id,score_a,score_b,status,stage").eq("stage","group").order("id");
+ if(me)throw me;
+ const {data:gs,error:ge}=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id,country,flag)").order("name");
+ if(ge)throw ge;
+ const pairs=[[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]];
+ for(const g of (gs||[])){
+   const name=String(g.name).trim().toUpperCase();
+   if(!groups().includes(name))continue;
+   const ts=(g.teams||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id))).slice(0,4);
+   const list=(ms||[]).filter(m=>m.group_id===g.id).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+   if(ts.length<4||list.length<6)continue;
+   for(let i=0;i<6;i++){
+     const wantA=ts[pairs[i][0]].id,wantB=ts[pairs[i][1]].id,old=list[i];
+     let scoreA=null,scoreB=null,status="scheduled";
+     if(old.team_a_id===wantA&&old.team_b_id===wantB&&old.score_a!==null&&old.score_b!==null){
+       scoreA=old.score_a;scoreB=old.score_b;status=old.status||"completed";
+     }else if(old.team_a_id===wantB&&old.team_b_id===wantA&&old.score_a!==null&&old.score_b!==null){
+       scoreA=old.score_b;scoreB=old.score_a;status=old.status||"completed";
+     }
+     const {error:e}=await supabaseClient.from("matches").update({team_a_id:wantA,team_b_id:wantB,score_a:scoreA,score_b:scoreB,status}).eq("id",old.id);
+     if(e)throw e;
+   }
+ }
+}
 function nav(p){document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("active",x.dataset.p===p))}
-function show(p){nav(p);if(p==="dashboard")dashboard();if(p==="teams")teamPage();if(p==="fixtures")fixturePage();if(p==="results")resultPage();if(p==="groupPoints")groupPointsPage();if(p==="knockout")knockoutPage();if(p==="topScorers")topScorersPage();if(p==="announcement")announcePage()}
+function show(p){nav(p);if(p==="dashboard")dashboard();if(p==="teams")teamPage();if(p==="fixtures")fixturePage();if(p==="results")resultPage();if(p==="groupPoints")groupPointsPage();if(p==="knockout")knockoutPage();if(p==="goalRanking")goalRankingPage();if(p==="topScorers")topScorersPage();if(p==="announcement")announcePage()}
 function dashboard(){main.innerHTML=`<section class=panel><h2>🏆 ${esc(data.tournament)}</h2><div class=grid><div class=card><h3>Teams</h3><b>${data.tournamentSize}</b></div><div class=card><h3>Groups</h3><b>${groups().length}</b></div><div class=card><h3>Group Matches</h3><b>${groups().length*6}</b></div><div class=card><h3>Knockout</h3><b>R16 → QF → SF → Final</b></div></div><p class=small>${data.drawDone?"🎲 Random Group Draw সম্পন্ন হয়েছে।":"🎲 Random Group Draw এখনো করা হয়নি।"}</p>${data.status==="finished"?`<p class=msg>🏆 Tournament Finished</p>${podiumHTML()}`:""}<button class="danger" onclick="resetTournament()">🔄 Reset Tournament</button><p class=small>Reset করলে এই Tournament-এর Draw, ফলাফল, পয়েন্ট ও Knockout মুছে যাবে। নতুন করে Random Draw করা যাবে।</p></section>`}
-function teamPage(){let h=`<section class=panel><h2>👥 Team Management</h2><p class=small>প্রতি Team-এর পতাকা ও দেশ Supabase থেকে আসে। এখানে শুধু Team Name পরিবর্তন করো।</p></section><div class=grid>`;for(let g of groups()){h+=`<section class=card><h3>Group ${g}</h3>`;data.teams[g].forEach((t,i)=>{let m=data.teamMeta[t]||{};h+=`<div style="margin-bottom:12px"><div class="small">${m.flag||"🏳️"} <span class="country">${esc(m.country||"Unknown")}</span></div><label>Team ${i+1}<input id="${g}${i}" value="${esc(t)}" autocomplete="off"></label></div>`});h+=`<button class=primary onclick="saveTeams('${g}')">Save Group ${g}</button></section>`}main.innerHTML=h+"</div>"}
-async function saveTeams(g){const names=[0,1,2,3].map(i=>document.getElementById(g+i)?.value.trim()||`Team ${i+1}`);data.teams[g]=names;save();if(supabaseClient){try{const {data:rows,error}=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id,country,flag)");if(error)throw error;const gr=(rows||[]).find(x=>String(x.name).trim().toUpperCase()===g);if(!gr)throw new Error("Group not found");const ts=(gr.teams||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));for(let i=0;i<Math.min(4,ts.length);i++){const meta=data.teamMeta[data.teams[g][i]]||{};const {error:e}=await supabaseClient.from("teams").update({name:names[i],country:meta.country||null,flag:meta.flag||null}).eq("id",ts[i].id);if(e)throw e}}catch(e){console.warn(e);alert("Team Save হয়নি: "+(e.message||e));return}}await loadTeamsFromSupabase();teamPage()}
-function fixtures(){let a=[];for(let g of groups()){let t=data.teams[g]||[];[[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]].forEach((p,i)=>a.push({id:g+(i+1),g,a:t[p[0]]||"TBD",b:t[p[1]]||"TBD"}))}return a}
+function teamPage(){
+ let h=`<section class=panel><h2>👥 Team Management</h2><p class=small>প্রতিটি Team-এর স্থায়ী ID অনুযায়ী Country/Flag বাঁধা। Group বদলালেও Flag/দেশ বদলাবে না। প্রতি Group-এ ঠিক ৪টি Team থাকবে।</p></section><div class=grid>`;
+ for(let g of groups()){
+   h+=`<section class=card><h3>Group ${g}</h3>`;
+   const names=data.teams[g]||[],ids=data.teamIds[g]||[];
+   for(let i=0;i<4;i++){
+     const id=ids[i]||`local-${g}-${i}`,t=names[i]||`Team ${i+1}`,m=metaForId(id);
+     h+=`<div style="margin-bottom:12px"><div class="small">${esc(m.flag)} <span class="country">${esc(m.country)}</span> <span class="muted">• ID ${esc(id).slice(0,8)}</span></div><label>Team ${i+1}<input id="${g}${i}" data-team-id="${esc(id)}" value="${esc(t)}"></label></div>`;
+   }
+   h+=`<button class=primary onclick="saveTeams('${g}')">Save Group ${g}</button></section>`;
+ }
+ main.innerHTML=h+"</div>";
+}
+async function saveTeams(g){
+ const ids=data.teamIds[g]||[];
+ const names=[0,1,2,3].map(i=>document.getElementById(g+i).value.trim()||`Team ${i+1}`);
+ data.teams[g]=names;save();
+ if(supabaseClient){
+   try{
+     for(let i=0;i<Math.min(4,ids.length);i++){
+       const {error}=await supabaseClient.from("teams").update({name:names[i]}).eq("id",ids[i]);
+       if(error)throw error;
+     }
+     await loadTeamsFromSupabase();await syncMatchesFromTeams();await loadResultsFromSupabase();
+   }catch(e){console.warn(e);alert("Team save হয়নি: "+(e.message||e))}
+ }
+ teamPage();
+}
+
+function fixtures(){let a=[];for(let g of groups()){let t=data.teams[g]||[],ids=data.teamIds[g]||[];[[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]].forEach((p,i)=>a.push({id:g+(i+1),g,a:t[p[0]]||"TBD",b:t[p[1]]||"TBD",aid:ids[p[0]]||null,bid:ids[p[1]]||null}))}return a}
+
 function setTournamentSize(v){if(data.drawDone){alert("Draw হয়ে যাওয়ার পর Tournament Size বদলানো যাবে না। Reset করে আবার নির্বাচন করো।");return}data.tournamentSize=Number(v);data.teams=data.teams||{};ALL_GROUPS.forEach((g,i)=>{if(!data.teams[g])data.teams[g]=defaultTeams[g]});save();fixturePage()}
-function fixturePage(){let sizeBox=`<section class="panel"><h2>👥 Tournament Size</h2><p class="small">তুমি ১৬, ২৪, ৩২ বা ৪৮ Team দিয়ে Tournament আয়োজন করতে পারবে। Draw-এর আগে Size বেছে নাও।</p><select onchange="setTournamentSize(this.value)">${SIZE_OPTIONS.map(n=>`<option value="${n}" ${n===data.tournamentSize?"selected":""}>${n} Teams</option>`).join("")}</select></section>`;let draw=data.drawDone?`<section class="panel done"><h3>🎲 Random Group Draw</h3><p>এই টুর্নামেন্টের Draw একবার হয়ে গেছে। একই টুর্নামেন্টে আবার করা যাবে না।</p></section>`:`<section class="panel drawbox"><h2>🎲 Random Group Draw</h2><p class=small>৩২টি Team-কে A–H Group-এ ৪টি করে Randomভাবে ভাগ করা হবে। এক টুর্নামেন্টে শুধু একবার।</p><button class=primary onclick="randomGroupDraw()">🎲 Random Group Draw</button></section>`;main.innerHTML=sizeBox+draw+`<section class=panel><h2>📅 Fixtures</h2><p class=small>প্রতি গ্রুপে ৬টি ম্যাচ।</p></section><div class=grid>`+groups().map(g=>`<section class=card><h3>Group ${g}</h3>${fixtures().filter(x=>x.g===g).map(x=>`<div class=match><b>${esc((data.teamMeta[x.a]||{}).flag||"🏳️")} ${esc(x.a)}</b> vs <b>${esc(x.b)} ${(data.teamMeta[x.b]||{}).flag||"🏳️"}</b><div class=small>Match ${x.id.slice(1)}</div></div>`).join("")}</section>`).join("")+"</div>"}
+function fixturePage(){
+ let sizeBox=`<section class="panel"><h2>👥 Tournament Size</h2><p class="small">১৬, ২৪, ৩২ বা ৪৮ Team নির্বাচন করা যাবে। Draw-এর আগে Size বেছে নাও।</p><select onchange="setTournamentSize(this.value)">${SIZE_OPTIONS.map(n=>`<option value="${n}" ${n===data.tournamentSize?"selected":""}>${n} Teams</option>`).join("")}</select></section>`;
+ let draw=data.drawDone?`<section class="panel done"><h3>🎲 Random Group Draw</h3><p>এই টুর্নামেন্টের Draw সম্পন্ন হয়েছে।</p></section>`:`<section class="panel drawbox"><h2>🎲 Random Group Draw</h2><p class=small>প্রতি Group-এ ৪টি Team থাকবে।</p><button class=primary onclick="randomGroupDraw()">🎲 Random Group Draw</button></section>`;
+ main.innerHTML=sizeBox+draw+`<section class=panel><h2>📅 Fixtures</h2><p class=small>প্রতি Group-এ ৬টি ম্যাচ।</p></section><div class=grid>`+groups().map(g=>`<section class=card><h3>Group ${g}</h3>${fixtures().filter(x=>x.g===g).map(x=>{const ma=metaForId(x.aid),mb=metaForId(x.bid);return `<div class=match><b>${esc(ma.flag)} ${esc(x.a)}</b> vs <b>${esc(mb.flag)} ${esc(x.b)}</b><div class=small>Match ${x.id.slice(1)}</div></div>`}).join("")}</section>`).join("")+`</div>`;
+}
+
 async function ensureGroupsForSize(){
  const {data:gs,error}=await supabaseClient.from("groups").select("id,name,tournament_id").order("name");if(error)throw error;
  const existing={};(gs||[]).forEach(g=>existing[String(g.name).trim().toUpperCase()]=g);
@@ -76,16 +219,44 @@ async function randomGroupDraw(){
   const inactive=ALL_GROUPS.filter(g=>!groupNames.includes(g));
   if(inactive.length&&unused.length){let gi=0;for(const t of unused){const {error:e}=await supabaseClient.from("teams").update({group_id:gm[inactive[gi%inactive.length]]}).eq("id",t.id);if(e)throw e;gi++}}
   data.results={};data.knockout={};data.podium=null;data.status="active";data.drawDone=true;save();
-  await rebuildGroupMatches();await loadTeamsFromSupabase();await loadResultsFromSupabase();
+  await syncMatchesFromTeams();await loadTeamsFromSupabase();await loadResultsFromSupabase();
   alert(`🎉 ${need} Team Random Group Draw সম্পন্ন হয়েছে!`);fixturePage()
  }catch(e){console.error(e);alert("Random Draw হয়নি: "+(e.message||e))}}
 
-async function rebuildGroupMatches(){if(!supabaseClient)return;const {data:ms,error}=await supabaseClient.from("matches").select("id,group_id,team_a_id,team_b_id,stage").eq("stage","group").order("id");if(error)throw error;const {data:gs,error:ge}=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id)").order("name");if(ge)throw ge;for(const g of (gs||[])){const name=String(g.name).trim().toUpperCase();if(!groups().includes(name))continue;const list=(ms||[]).filter(m=>m.group_id===g.id);const ts=(g.teams||[]).slice(0,4);if(list.length<6||ts.length<4)continue;const pairs=[[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]];for(let i=0;i<6;i++){const {error:e}=await supabaseClient.from("matches").update({team_a_id:ts[pairs[i][0]].id,team_b_id:ts[pairs[i][1]].id,score_a:null,score_b:null,status:"scheduled"}).eq("id",list[i].id);if(e)throw e}}}
+async function rebuildGroupMatches(){return syncMatchesFromTeams()}
 
-function resultPage(){let f=fixtures();main.innerHTML=`<section class=panel><h2>📝 ম্যাচের ফলাফল</h2><p class=small>দুই ঘরে গোলের সংখ্যা লিখে Save Result চাপো।</p><p class=msg>জয়=৩, ড্র=১, হার=০</p></section><div class=grid>`+f.map(x=>{let r=data.results[x.id]||{};return `<section class=card><h3>Group ${x.g} • Match ${x.id.slice(1)}</h3><div class=row><b>${esc(x.a)}</b><input type=number min=0 step=1 inputmode="numeric" autocomplete="off" id="${x.id}a" value="${r.a??''}"><input type=number min=0 step=1 inputmode="numeric" autocomplete="off" id="${x.id}b" value="${r.b??''}"><b>${esc(x.b)}</b></div><br><button class=primary onclick="saveResult('${x.id}')">Save Result</button></section>`}).join("")+"</div>"}
-async function saveResult(id){const ia=document.getElementById(id+"a"),ib=document.getElementById(id+"b");if(!ia||!ib)return;const a=Number(ia.value),b=Number(ib.value);if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0){alert("দুই দলের Score দিন");return}if(!supabaseClient){alert("Supabase connection পাওয়া যাচ্ছে না।");return}try{const {data:ms,error:me}=await supabaseClient.from("matches").select("id,group_id,team_a_id,team_b_id").eq("stage","group");if(me)throw me;const local=fixtures().find(x=>x.id===id);if(!local)throw new Error("Match not found");const {data:gs,error:ge}=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id)");if(ge)throw ge;const gr=(gs||[]).find(g=>String(g.name).trim().toUpperCase()===local.g);const A=(gr?.teams||[]).find(t=>t.name===local.a),B=(gr?.teams||[]).find(t=>t.name===local.b);if(!A||!B)throw new Error("Teams not found");const mr=(ms||[]).find(x=>(x.team_a_id===A.id&&x.team_b_id===B.id)||(x.team_a_id===B.id&&x.team_b_id===A.id));if(!mr)throw new Error("Match not found in Supabase");const patch=(mr.team_a_id===A.id)?{score_a:a,score_b:b,status:"completed"}:{score_a:b,score_b:a,status:"completed"};const {error:ue}=await supabaseClient.from("matches").update(patch).eq("id",mr.id);if(ue)throw ue;data.results[id]={a,b};save();alert("✅ Score Save হয়েছে");await loadResultsFromSupabase();resultPage()}catch(e){console.error(e);alert("Score Save হয়নি: "+(e.message||e))}}
+function resultPage(){let f=fixtures();main.innerHTML=`<section class=panel><h2>📝 ম্যাচের ফলাফল</h2><p class=small>Group ম্যাচের Score Save করো। জয়=৩, ড্র=১, হার=০</p></section><div class=grid>`+f.map(x=>{let r=data.results[x.id]||{};return `<section class=card><h3>Group ${x.g} • Match ${x.id.slice(1)}</h3><div class=row><b>${esc(x.a)}</b><input type=number min=0 id="${x.id}a" value="${r.a??''}"><input type=number min=0 id="${x.id}b" value="${r.b??''}"><b>${esc(x.b)}</b></div><br><button class=primary onclick="saveResult('${x.id}')">Save Result</button></section>`}).join("")+`</div>`}
+
+async function saveResult(id){
+ let a=Number(document.getElementById(id+"a").value),b=Number(document.getElementById(id+"b").value);
+ if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0){alert("দুই দলের Score দিন");return}
+ data.results[id]={a,b};save();
+ if(supabaseClient){try{
+   const m=fixtures().find(x=>x.id===id);if(!m?.aid||!m?.bid)throw new Error("Team ID পাওয়া যায়নি");
+   const {data:ms,error}=await supabaseClient.from("matches").select("id,team_a_id,team_b_id").eq("stage","group").or(`and(team_a_id.eq.${m.aid},team_b_id.eq.${m.bid}),and(team_a_id.eq.${m.bid},team_b_id.eq.${m.aid})`);
+   if(error)throw error;const mr=(ms||[])[0];if(!mr)throw new Error("Match not found");
+   let patch={score_a:a,score_b:b,status:"completed"};if(mr.team_a_id===m.bid&&mr.team_b_id===m.aid){patch.score_a=b;patch.score_b=a}
+   const {error:ue}=await supabaseClient.from("matches").update(patch).eq("id",mr.id);if(ue)throw ue;
+   await loadResultsFromSupabase();
+ }catch(e){console.warn(e);alert("Result save হয়নি: "+(e.message||e))}}
+ resultPage();
+}
+
 function stats(g){let s={};(data.teams[g]||[]).forEach(t=>s[t]={mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0});fixtures().filter(x=>x.g===g).forEach(x=>{let r=data.results[x.id];if(!r||!s[x.a]||!s[x.b])return;let A=s[x.a],B=s[x.b];A.mp++;B.mp++;A.gf+=r.a;A.ga+=r.b;B.gf+=r.b;B.ga+=r.a;if(r.a>r.b){A.w++;A.pts+=3;B.l++}else if(r.a<r.b){B.w++;B.pts+=3;A.l++}else{A.d++;B.d++;A.pts++;B.pts++}});return s}
-function table(g){let s=stats(g),arr=Object.entries(s).map(([team,v])=>({team,...v})).sort((a,b)=>b.pts-a.pts||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf);return `<h3>Group ${g}</h3><table><tr><th>#</th><th class=left>Team</th><th>MP</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>`+arr.map((x,i)=>`<tr class="${i<2?'ok':''}"><td>${i+1}</td><td class=left>${esc((data.teamMeta[x.team]||{}).flag||"🏳️")} ${esc(x.team)}</td><td>${x.mp}</td><td>${x.w}</td><td>${x.d}</td><td>${x.l}</td><td>${x.gf-x.ga}</td><td><b>${x.pts}</b></td></tr>`).join("")+"</table>"}
+function table(g){let s=stats(g),arr=Object.entries(s).map(([team,v])=>({team,...v})).sort((a,b)=>b.pts-a.pts||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf);return `<h3>Group ${g}</h3><table><tr><th>#</th><th class=left>Team</th><th>MP</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>`+arr.map((x,i)=>`<tr class="${i<2?'ok':''}"><td>${i+1}</td><td class=left>${esc(metaForId(teamIdAt(g,Math.max(0,(data.teams[g]||[]).indexOf(x.team))).flag))} ${esc(x.team)}</td><td>${x.mp}</td><td>${x.w}</td><td>${x.d}</td><td>${x.l}</td><td>${x.gf-x.ga}</td><td><b>${x.pts}</b></td></tr>`).join("")+"</table>"}
+function goalRankingPage(){
+ const totals={};
+ groups().forEach(g=>(data.teams[g]||[]).forEach((t,i)=>{const id=teamIdAt(g,i);const m=metaForId(id);totals[t]={team:t,goals:0,flag:m.flag,country:m.country}}));
+ Object.entries(data.results||{}).forEach(([id,r])=>{
+   const m=fixtures().find(x=>x.id===id); if(!m)return;
+   if(totals[m.a])totals[m.a].goals+=Number(r.a)||0;
+   if(totals[m.b])totals[m.b].goals+=Number(r.b)||0;
+ });
+ const rows=Object.values(totals).sort((a,b)=>b.goals-a.goals||a.team.localeCompare(b.team));
+ main.innerHTML=`<section class=panel><h2>⚽ Goal Ranking</h2><p class=small>Match Results-এর Score থেকেই Goal হিসাব অটোমেটিক হবে।</p></section><section class=card>`+
+ rows.map((x,i)=>`<div class="row" style="grid-template-columns:45px 1fr 80px"><b>${i+1}</b><span>${esc(x.flag)} ${esc(x.country)}<br><b>${esc(x.team)}</b></span><span class=goalbox>${x.goals} Goal${x.goals===1?"":"s"}</span></div>`).join("")+
+ `</section>`;
+}
 function groupPointsPage(){main.innerHTML=`<section class=panel><h2>📊 Group Points</h2><p class=small>প্রতি Group-এর Top 2 Team Knockout-এ যাবে।</p></section><div class=grid>`+groups().map(g=>`<section class=card>${table(g)}</section>`).join("")+`</div>`}
 function groupRank(g){return Object.entries(stats(g)).map(([team,v])=>({team,...v})).sort((a,b)=>b.pts-a.pts||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf)}
 function qualified(){let all=[];const n=data.tournamentSize;groups().forEach(g=>{let r=groupRank(g);r.forEach((x,i)=>all.push({...x,g,rank:i+1}))});if(n===16){let q=[];groups().forEach(g=>{q.push(...groupRank(g).slice(0,4).map(x=>x.team))});return q}if(n===24){let q=[];groups().forEach(g=>{q.push(...groupRank(g).slice(0,2).map(x=>x.team))});let thirds=[];groups().forEach(g=>{let r=groupRank(g);if(r[2])thirds.push({...r[2],g})});thirds.sort((a,b)=>b.pts-a.pts||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf);q.push(...thirds.slice(0,4).map(x=>x.team));return q}if(n===48){let q=[];groups().forEach(g=>{q.push(...groupRank(g).slice(0,2).map(x=>x.team))});let thirds=[];groups().forEach(g=>{let r=groupRank(g);if(r[2])thirds.push({...r[2],g})});thirds.sort((a,b)=>b.pts-a.pts||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf);q.push(...thirds.slice(0,8).map(x=>x.team));return q}let q=[];groups().forEach(g=>q.push(...groupRank(g).slice(0,2).map(x=>x.team)));return q}
@@ -105,22 +276,10 @@ function canFinish(){let f=data.knockout.final?.[0],t=data.knockout.third?.[0];r
 function finishTournament(){if(!canFinish()){alert("Final এবং 3rd Place সম্পন্ন না হওয়া পর্যন্ত Tournament Finish করা যাবে না।");return}let f=data.knockout.final[0],t=data.knockout.third[0];data.podium={champion:teamFromMatch(f),runnerUp:f.scoreA>f.scoreB?f.away:f.home,third:teamFromMatch(t)};data.status="finished";save();alert("🏆 Tournament Finished! Champion, Runner-up ও 3rd Place Save হয়েছে।");knockoutPage()}
 async function resetTournament(){if(!confirm("⚠️ এই Tournament-এর সব Result, Points, Knockout, Podium এবং Random Draw Reset হবে। নতুন Tournament শুরু করবেন?"))return;data.results={};data.knockout={};data.podium=null;data.drawDone=false;data.status="active";data.goalEvents=[];data.players={};save();if(supabaseClient){try{const {error}=await supabaseClient.from("matches").update({score_a:null,score_b:null,status:"scheduled"}).eq("stage","group");if(error)throw error}catch(e){console.warn("Supabase match reset failed",e);}}alert("🔄 Tournament Reset হয়েছে। এখন Fixtures-এ গিয়ে আবার Random Group Draw করো।");show("fixtures")}
 function podiumHTML(){if(!data.podium)return"";let p=data.podium;function box(title,team,cls){let m=data.teamMeta[team]||{};return `<div class="place ${cls||""}"><h3>${title}</h3><div class=flag style="font-size:42px;margin:10px">${esc(m.flag||"🏳️")}</div><b>${esc(team||"—")}</b></div>`}return `<h2>🏆 Tournament Podium</h2><div class=podium>${box("🥇 Champion",p.champion,"champ")}${box("🥈 Runner-up",p.runnerUp)}${box("🥉 3rd Place",p.third)}</div>`}
-function scorerRows(){
-  const rows=[];
-  groups().forEach(g=>(data.teams[g]||[]).forEach(team=>{
-    const meta=data.teamMeta[team]||{};
-    (data.players[team]||[]).forEach((player,i)=>{
-      if(!player) return;
-      const goals=data.goalEvents.filter(e=>e.team===team&&e.player===player).reduce((sum,e)=>sum+Number(e.goals||0),0);
-      rows.push({player,team,flag:meta.flag||"🏳️",country:meta.country||"Unknown",goals});
-    });
-  }));
-  return rows.sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player));
-}
-function topScorersPage(){
-  const rows=scorerRows();
-  main.innerHTML=`<section class=panel><h2>⚽ Top Scorers</h2><p class=small>Player name তুমি Team Management-এ লিখবে। Goals এখানে নিজে থেকে হিসাব হবে; সরাসরি Goals পরিবর্তন করার ঘর নেই।</p></section><section class=card>${rows.length?`<div class="scorer"><b>#</b><b>Player</b><b>Team / Country</b><b>Goals</b></div>`+rows.map((x,i)=>`<div class="scorer"><span class=rank>${i+1}</span><span><b>${esc(x.player)}</b></span><span>${esc(x.flag)} <span class=country>${esc(x.country)}</span><br><span class=small>${esc(x.team)}</span></span><span class=goalbox>${x.goals}</span></div>`).join(""):`<p class=small>এখনো Player name দেওয়া হয়নি। Team Management-এ গিয়ে Player name লিখো।`}</section><section class=panel><h3>🎯 Goal Record</h3><p class=small>পরের ধাপে Match Results-এর সঙ্গে Goal Scorer যোগ করলে এই তালিকা ম্যাচের গোল অনুযায়ী স্বয়ংক্রিয়ভাবে আপডেট হবে।</p></section>`;
-}
+function scorerRows(){return []}
+
+function topScorersPage(){main.innerHTML=`<section class=panel><h2>⚽ Top Scorers</h2><p class=small>Player fields বাদ দেওয়া হয়েছে। Team-এর Goal Ranking Match Results-এর Score থেকে অটোমেটিক হিসাব হয়।</p></section><section class=card><p class=small>ব্যক্তিগত Player Goal data এই ভার্সনে ব্যবহার করা হচ্ছে না।</p></section>`}
+
 function announcePage(){main.innerHTML=`<section class=panel><h2>📢 Announcement</h2><textarea id=ann style="width:100%;min-height:150px;background:#0b1525;color:#fff;border:1px solid #334155;border-radius:8px;padding:10px">${esc(data.announcement)}</textarea><br><br><button class=primary onclick="saveAnn()">Publish Announcement</button></section><section class=panel><h3>Public Announcement Preview</h3><p>${esc(data.announcement)||"কোনো Announcement নেই।"}</p></section>`}
 function saveAnn(){data.announcement=document.getElementById("ann").value;save();announcePage()}
 function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
