@@ -30,13 +30,29 @@ const DEFAULT_COUNTRIES=[
   ["🇳🇿","New Zealand"],
   ["🇦🇹","Austria"],["🇧🇪","Belgium"],["🇧🇦","Bosnia and Herzegovina"],["🇭🇷","Croatia"],["🇨🇿","Czechia"],["🏴","England"],["🇫🇷","France"],["🇩🇪","Germany"],["🇳🇱","Netherlands"],["🇳🇴","Norway"],["🇵🇹","Portugal"],["🏴","Scotland"],["🇪🇸","Spain"],["🇸🇪","Sweden"],["🇨🇭","Switzerland"],["🇹🇷","Türkiye"]
 ];
-function seedDefaultFlags(){
+async function seedDefaultFlags(){
   const all=[]; groups().forEach(g=>(data.teams[g]||[]).forEach(t=>all.push(t)));
+  let changed=false;
   all.slice(0,data.tournamentSize).forEach((team,i)=>{
-    const old=data.teamMeta[team]||{};
-    data.teamMeta[team]={flag:(DEFAULT_COUNTRIES[i]||["🏳️","Unknown"])[0],country:(DEFAULT_COUNTRIES[i]||["🏳️","Unknown"])[1]};
+    if(!data.teamMeta[team]){
+      const c=DEFAULT_COUNTRIES[i]||["🏳️","Unknown"];
+      data.teamMeta[team]={flag:c[0],country:c[1]};
+      changed=true;
+    }
   });
   save();
+  if(supabaseClient){
+    const ids=data.teamIds||{};
+    for(const g of groups()){
+      const names=data.teams[g]||[], tids=ids[g]||[];
+      for(let i=0;i<Math.min(names.length,tids.length);i++){
+        const m=data.teamMeta[names[i]]||{};
+        if(m.country||m.flag){
+          await supabaseClient.from("teams").update({country:m.country||null,flag:m.flag||null}).eq("id",tids[i]);
+        }
+      }
+    }
+  }
 }
 function save(){localStorage.setItem("bcs_admin",JSON.stringify(data))}
 function login(){if(document.getElementById("pin").value==="1234"){document.getElementById("login").style.display="none";document.getElementById("app").style.display="block";init()}else document.getElementById("loginmsg").textContent="ভুল PIN"}
@@ -64,7 +80,7 @@ async function liveSync(first=false){
  }catch(e){console.warn("Live sync:",e)}
 }
 async function loadTeamsFromSupabase(){
- const {data:rows,error}=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id)").order("name");
+ const {data:rows,error}=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id,country,flag)").order("name");
  if(error)throw error;
  const fresh={}, ids={};
  (rows||[]).forEach(group=>{
@@ -73,6 +89,9 @@ async function loadTeamsFromSupabase(){
    const ts=(group.teams||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));
    fresh[g]=ts.map(t=>t.name);
    ids[g]=ts.map(t=>t.id);
+   ts.forEach(t=>{
+     if(t.country||t.flag) data.teamMeta[t.name]={country:t.country||"Unknown",flag:t.flag||"🏳️"};
+   });
  });
  groups().forEach(g=>{if(!fresh[g])fresh[g]=[];if(!ids[g])ids[g]=[]});
  data.teams=fresh;data.teamIds=ids;save();
@@ -99,7 +118,7 @@ async function syncMatchesFromTeams(){
  if(!supabaseClient)return;
  const {data:ms,error:me}=await supabaseClient.from("matches").select("id,group_id,team_a_id,team_b_id,score_a,score_b,status,stage").eq("stage","group").order("id");
  if(me)throw me;
- const {data:gs,error:ge}=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id)").order("name");
+ const {data:gs,error:ge}=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id,country,flag)").order("name");
  if(ge)throw ge;
  const pairs=[[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]];
  for(const g of (gs||[])){
@@ -135,7 +154,12 @@ async function saveTeams(g){
    try{
      const ids=data.teamIds[g]||[];
      for(let i=0;i<Math.min(4,ids.length);i++){
-       const {error:e}=await supabaseClient.from("teams").update({name:names[i]}).eq("id",ids[i]);
+       const m=data.teamMeta[names[i]]||{};
+       const {error:e}=await supabaseClient.from("teams").update({
+         name:names[i],
+         country:m.country||null,
+         flag:m.flag||null
+       }).eq("id",ids[i]);
        if(e)throw e;
      }
      await loadTeamsFromSupabase();
