@@ -2,7 +2,7 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="apple-touch-icon" href="./icon-192.png"></head><body><header><h2>BCS Gamer</h2><div class="small" style="color:#d1d5db">Public Tournament Viewer</div></header><nav><button id="b1" onclick="show('fixtures')">Fixtures</button><button id="b2" onclick="show('results')">Match Results</button><button id="b3" onclick="show('points')">Group Points</button></nav><main id="app">Loading...</main><script>
 const SUPABASE_URL="https://txfissofmkpfizavrpcp.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY="PASTE_YOUR_EXISTING_PUBLISHABLE_KEY_HERE";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_SUQ_jBXrre6ClvPyxZBZxg_aYYIieEN";
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 let groups=[],matches=[],current="fixtures";
 async function load(){try{let g=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id)").order("name");if(g.error)throw g.error;let m=await supabaseClient.from("matches").select("id,group_id,team_a_id,team_b_id,score_a,score_b,status,stage").eq("stage","group");if(m.error)throw m.error;groups=g.data||[];matches=m.data||[];render()}catch(e){document.getElementById("app").innerHTML="<div class='card'>Data load হয়নি।</div>"}}
