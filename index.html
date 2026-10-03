@@ -42,7 +42,9 @@ async function liveSync(first=false){
    await loadGoalEventsFromSupabase();
    if(!first && document.querySelector(".tabs button.active")){
      const p=document.querySelector(".tabs button.active").dataset.p;
-     show(p);
+     // Do not rebuild editable pages while the admin is typing.
+     // Otherwise the 2-second live sync clears the score inputs.
+     if(!["results","teams","announcement"].includes(p)) show(p);
    }
  }catch(e){console.warn("Live sync:",e)}
 }
