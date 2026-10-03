@@ -1,23 +1,211 @@
-<!DOCTYPE html><html lang="bn"><head><!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-36L2NCK0MS"></script>
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCS Gamer Viewer</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#07111f;color:#eef6ff;font-family:Arial,sans-serif}
+header{background:#0d1b2d;padding:22px 14px;text-align:center;border-bottom:1px solid #24364d}
+header h1{margin:0 0 6px;color:#8df0c4}.sub{color:#9fb1c7}
+nav{display:flex;gap:8px;padding:10px;background:#0b1727;overflow:auto;position:sticky;top:0;z-index:5;border-bottom:1px solid #26384e}
+button{flex:0 0 auto;padding:12px 15px;border:0;border-radius:10px;background:#1b2a3f;color:#eef6ff;font-size:14px}
+button.active{background:#11b981;color:#062018}
+main{padding:16px;max-width:900px;margin:auto}
+.card{background:#101e30;border-radius:18px;padding:16px;margin-bottom:14px;border:1px solid #1d3047}
+h2{margin-top:4px}.match{padding:15px}.row{display:grid;grid-template-columns:1fr 70px 1fr;gap:8px;align-items:center;text-align:center}
+.score{font-weight:800;font-size:20px}.small{font-size:13px;color:#8ea2ba}.status{margin-top:10px;color:#8ea2ba}.live{color:#64e6b1;font-weight:700}
+.table{width:100%;border-collapse:collapse}.table th,.table td{padding:9px 4px;border-bottom:1px solid #26384e;text-align:center}.table .left{text-align:left}
+.badge{display:inline-block;padding:4px 8px;border-radius:8px;background:#173b32;color:#74e8b8;font-size:12px}
+.error{color:#ff9a9a}.ok{color:#7ff0bd}
+@media(max-width:520px){.row{grid-template-columns:1fr 58px 1fr}.table{font-size:12px}}
+</style>
+</head>
+<body>
+<header><h1>BCS Gamer</h1><div class="sub">Live Tournament Viewer</div></header>
+<nav>
+<button id="b1" onclick="show('fixtures')">Fixtures</button>
+<button id="b2" onclick="show('results')">Match Results</button>
+<button id="b3" onclick="show('points')">Group Points</button>
+<button id="b4" onclick="show('goals')">⚽ Goal Ranking</button>
+<button id="b5" onclick="show('teams')">Teams & Players</button>
+<button id="b6" onclick="show('knockout')">🏆 Knockout</button>
+<button id="b7" onclick="show('announcement')">📢 News</button>
+</nav>
+<main id="app"><div class="card">Loading...</div></main>
 <script>
-window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());
-gtag('config', 'G-36L2NCK0MS');
-</script><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BCS Gamer</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><style>body{font-family:Arial;margin:0;background:#f5f7fb;color:#172033}header{background:#111827;color:#fff;padding:18px;text-align:center}nav{display:flex;gap:6px;padding:10px;background:#fff}button{flex:1;padding:11px;border:0;border-radius:8px}button.active{background:#111827;color:#fff}main{padding:14px}.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px}.row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #eee}.small{font-size:13px;color:#6b7280}.score{font-weight:bold}</style></head><body><header><h2>BCS Gamer</h2><div class="small" style="color:#d1d5db">Public Tournament Viewer</div></header><nav><button id="b1" onclick="show('fixtures')">Fixtures</button><button id="b2" onclick="show('results')">Match Results</button><button id="b3" onclick="show('points')">Group Points</button></nav><main id="app">Loading...</main><script>
 const SUPABASE_URL="https://txfissofmkpfizavrpcp.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY="sb_publishable_SUQ_jBXrre6ClvPyxZBZxg_aYYIieEN";
-const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-let groups=[],matches=[],current="fixtures";
-async function load(){try{let g=await supabaseClient.from("groups").select("id,name,teams(id,name,group_id)").order("name");if(g.error)throw g.error;let m=await supabaseClient.from("matches").select("id,group_id,team_a_id,team_b_id,score_a,score_b,status,stage").eq("stage","group");if(m.error)throw m.error;groups=g.data||[];matches=m.data||[];render()}catch(e){document.getElementById("app").innerHTML="<div class='card'>Data load হয়নি।</div>"}}
-function tn(id){for(const g of groups){const t=(g.teams||[]).find(x=>x.id===id);if(t)return t.name}return"Unknown Team"}
-function gn(id){const g=groups.find(x=>x.id===id);return g?g.name:""}
-function done(m){return m.status==="completed"||(m.score_a!==null&&m.score_b!==null)}
-function show(x){current=x;["fixtures","results","points"].forEach((p,i)=>document.getElementById("b"+(i+1)).classList.toggle("active",p===x));render()}
-function render(){if(current==="fixtures")fix();if(current==="results")res();if(current==="points")pts()}
-function fix(){let o="<h2>Fixtures</h2>";matches.forEach(m=>o+=`<div class="card"><b>Group ${gn(m.group_id)}</b><div class="row"><span>${tn(m.team_a_id)}</span><span>vs</span><span>${tn(m.team_b_id)}</span></div><div class="small">${done(m)?"Completed":"Upcoming"}</div></div>`);document.getElementById("app").innerHTML=o}
-function res(){let o="<h2>Match Results</h2>",a=matches.filter(done);if(!a.length)o+="<div class='card'>No completed results yet.</div>";a.forEach(m=>o+=`<div class="card"><b>Group ${gn(m.group_id)}</b><div class="row"><span>${tn(m.team_a_id)}</span><span class="score">${m.score_a} - ${m.score_b}</span><span>${tn(m.team_b_id)}</span></div></div>`);document.getElementById("app").innerHTML=o}
-function pts(){let o="<h2>Group Points</h2>";groups.forEach(g=>{let ts=(g.teams||[]).map(t=>({id:t.id,name:t.name,p:0,w:0,d:0,l:0})),mp={};ts.forEach(t=>mp[t.id]=t);matches.filter(m=>m.group_id===g.id&&done(m)).forEach(m=>{let a=mp[m.team_a_id],b=mp[m.team_b_id];if(!a||!b)return;if(+m.score_a>+m.score_b){a.p+=3;a.w++;b.l++}else if(+m.score_a<+m.score_b){b.p+=3;b.w++;a.l++}else{a.p++;b.p++;a.d++;b.d++}});ts.sort((a,b)=>b.p-a.p||b.w-a.w);o+=`<div class="card"><b>Group ${g.name}</b>`;ts.forEach(t=>o+=`<div class="row"><span>${t.name}</span><span>${t.p} pts</span></div>`);o+="</div>"});document.getElementById("app").innerHTML=o}
-show("fixtures");load();setInterval(load,10000);
-</script></body></html>
+let sb=null, groups=[], teams=[], matches=[], goalEvents=[], players=[], announcements=[], current="fixtures", loading=false;
+
+function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
+function done(m){return m.status==="completed" || (m.score_a!==null && m.score_b!==null)}
+function gname(id){const g=groups.find(x=>x.id===id);return g?g.name:""}
+function tname(id){const t=teams.find(x=>x.id===id);return t?t.name:"Unknown Team"}
+function groupTeams(gid){return teams.filter(t=>t.group_id===gid)}
+function sortedGroups(){return [...groups].sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{numeric:true}))}
+function groupLabel(g){return String(g.name||"").trim()}
+
+async function q(table, columns){
+  const r=await sb.from(table).select(columns);
+  if(r.error) throw r.error;
+  return r.data||[];
+}
+
+async function load(){
+  if(loading)return;
+  loading=true;
+  try{
+    if(!sb){
+      if(!window.supabase) throw new Error("Supabase library not loaded");
+      sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+    }
+
+    // Separate queries make the Viewer independent of nested-relation quirks.
+    const [gs,ts,ms]=await Promise.all([
+      q("groups","id,name"),
+      q("teams","id,name,group_id"),
+      q("matches","id,group_id,team_a_id,team_b_id,score_a,score_b,status,stage")
+    ]);
+
+    groups=gs;
+    teams=ts;
+
+    matches=ms.filter(m=>!m.stage || m.stage==="group");
+
+    // Optional tables: their absence must not stop the main Viewer.
+    try{goalEvents=await q("goal_events","id,match_id,team_id,player_name,goals")}catch(e){goalEvents=[]}
+    try{players=await q("players","id,team_id,name,jersey_number")}catch(e){players=[]}
+    try{announcements=await q("announcements","*")}catch(e){announcements=[]}
+
+    render();
+  }catch(e){
+    document.getElementById("app").innerHTML=`<div class="card"><b>Viewer data load হয়নি।</b><p class="small">${esc(e.message||e)}</p><p class="small">২ সেকেন্ড পর আবার চেষ্টা হবে।</p></div>`;
+  }finally{loading=false}
+}
+
+function show(x){
+  current=x;
+  const map={fixtures:"b1",results:"b2",points:"b3",goals:"b4",teams:"b5",knockout:"b6",announcement:"b7"};
+  Object.values(map).forEach(id=>{const b=document.getElementById(id);if(b)b.classList.remove("active")});
+  const b=document.getElementById(map[x]);if(b)b.classList.add("active");
+  render();
+}
+
+function render(){
+  if(current==="fixtures")fix();
+  else if(current==="results")res();
+  else if(current==="points")pts();
+  else if(current==="goals")goals();
+  else if(current==="teams")teamPage();
+  else if(current==="knockout")knockoutPage();
+  else announcementPage();
+}
+
+function fix(){
+  let o="<h2>Fixtures</h2>";
+  if(!matches.length)o+="<div class=card>No fixtures yet.</div>";
+  sortedGroups().forEach(g=>{
+    const ms=matches.filter(m=>m.group_id===g.id);
+    if(!ms.length)return;
+    o+=`<div class="card"><h3>Group ${esc(groupLabel(g))}</h3>`;
+    ms.forEach(m=>{
+      o+=`<div class="match"><div class="row"><b>${esc(tname(m.team_a_id))}</b><span>VS</span><b>${esc(tname(m.team_b_id))}</b></div>
+      <div class="status">${done(m)?`<span class=live>Completed • ${m.score_a} - ${m.score_b}</span>`:"Upcoming"}</div></div>`;
+    });
+    o+="</div>";
+  });
+  document.getElementById("app").innerHTML=o;
+}
+
+function res(){
+  const a=matches.filter(done);
+  let o="<h2>Match Results</h2>";
+  if(!a.length)o+="<div class=card>No completed results yet.</div>";
+  sortedGroups().forEach(g=>{
+    const ms=a.filter(m=>m.group_id===g.id);if(!ms.length)return;
+    o+=`<div class=card><h3>Group ${esc(groupLabel(g))}</h3>`;
+    ms.forEach(m=>o+=`<div class="match"><div class=row><span>${esc(tname(m.team_a_id))}</span><span class=score>${m.score_a} - ${m.score_b}</span><span>${esc(tname(m.team_b_id))}</span></div></div>`);
+    o+="</div>";
+  });
+  document.getElementById("app").innerHTML=o;
+}
+
+function pts(){
+  let o="<h2>Group Points</h2>";
+  sortedGroups().forEach(g=>{
+    const ts=groupTeams(g.id).map(t=>({id:t.id,name:t.name,mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0}));
+    const mp={};ts.forEach(t=>mp[t.id]=t);
+    matches.filter(m=>m.group_id===g.id&&done(m)).forEach(m=>{
+      const a=mp[m.team_a_id],b=mp[m.team_b_id];if(!a||!b)return;
+      a.mp++;b.mp++;a.gf+=+m.score_a;a.ga+=+m.score_b;b.gf+=+m.score_b;b.ga+=+m.score_a;
+      if(+m.score_a>+m.score_b){a.w++;b.l++;a.pts+=3}
+      else if(+m.score_a<+m.score_b){b.w++;a.l++;b.pts+=3}
+      else{a.d++;b.d++;a.pts++;b.pts++}
+    });
+    ts.sort((a,b)=>b.pts-a.pts||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf);
+    o+=`<div class=card><h3>Group ${esc(groupLabel(g))}</h3><table class=table><tr><th>#</th><th class=left>Team</th><th>MP</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>`;
+    ts.forEach((t,i)=>o+=`<tr><td>${i+1}</td><td class=left>${esc(t.name)}</td><td>${t.mp}</td><td>${t.w}</td><td>${t.d}</td><td>${t.l}</td><td>${t.gf-t.ga}</td><td><b>${t.pts}</b></td></tr>`);
+    o+="</table></div>";
+  });
+  if(!groups.length)o+="<div class=card>No groups yet. Admin must complete the Random Draw.</div>";
+  document.getElementById("app").innerHTML=o;
+}
+
+function goals(){
+  const totals={};
+  goalEvents.forEach(e=>{
+    const n=String(e.player_name||"").trim();if(!n)return;
+    const key=n.toLowerCase();
+    if(!totals[key])totals[key]={name:n,team:tname(e.team_id),goals:0};
+    totals[key].goals+=Number(e.goals||0);
+  });
+  const rows=Object.values(totals).sort((a,b)=>b.goals-a.goals||a.name.localeCompare(b.name)).slice(0,10);
+  let o="<h2>⚽ Goal Ranking — Top 10</h2>";
+  if(!rows.length)o+="<div class=card>No goal scorer data yet.</div>";
+  rows.forEach((x,i)=>o+=`<div class=card><div class=row style="grid-template-columns:45px 1fr 80px"><b>${i+1}</b><span style="text-align:left"><b>${esc(x.name)}</b><br><span class=small>${esc(x.team)}</span></span><span class=score>${x.goals}</span></div></div>`);
+  document.getElementById("app").innerHTML=o;
+}
+
+function teamPage(){
+  let o="<h2>Teams & Players</h2>";
+  sortedGroups().forEach(g=>{
+    const ts=groupTeams(g.id);
+    if(!ts.length)return;
+    o+=`<div class=card><h3>Group ${esc(groupLabel(g))}</h3>`;
+    ts.forEach(t=>{
+      const ps=players.filter(p=>p.team_id===t.id);
+      o+=`<div style="padding:10px 0;border-bottom:1px solid #26384e"><b>${esc(t.name)}</b>`;
+      if(ps.length)o+=`<div class=small>${ps.map(p=>esc(p.name)+(p.jersey_number!=null?` (#${esc(p.jersey_number)})`:"")).join(" • ")}</div>`;
+      o+="</div>";
+    });
+    o+="</div>";
+  });
+  document.getElementById("app").innerHTML=o;
+}
+
+function knockoutPage(){
+  const ks=matches.filter(m=>m.stage && m.stage!=="group");
+  let o="<h2>🏆 Knockout</h2>";
+  if(!ks.length)o+="<div class=card>Knockout matches will appear here when Admin creates them.</div>";
+  ks.forEach(m=>o+=`<div class=card><b>${esc(m.stage)}</b><div class=row><span>${esc(tname(m.team_a_id))}</span><span class=score>${done(m)?`${m.score_a}-${m.score_b}`:"VS"}</span><span>${esc(tname(m.team_b_id))}</span></div></div>`);
+  document.getElementById("app").innerHTML=o;
+}
+
+function announcementPage(){
+  let o="<h2>📢 Announcements</h2>";
+  if(!announcements.length)o+="<div class=card>No announcements yet.</div>";
+  announcements.slice().sort((a,b)=>String(b.created_at||"").localeCompare(String(a.created_at||""))).forEach(a=>{
+    o+=`<div class=card><h3>${esc(a.title||"Announcement")}</h3><div>${esc(a.message||a.body||a.content||"")}</div></div>`;
+  });
+  document.getElementById("app").innerHTML=o;
+}
+
+show("fixtures");
+load();
+setInterval(load,2000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)load()});
+</script>
+</body>
+</html>
