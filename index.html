@@ -152,6 +152,30 @@ function teamPage(){let h=`<section class=panel><h2>👥 Team Management</h2><p 
 async function saveTeams(g){const names=[0,1,2,3].map(i=>document.getElementById(g+i).value.trim()||`Team ${i+1}`);const old=data.teams[g]||[];const ids=data.teamIds[g]||[];const oldPlayers={};old.forEach((t,i)=>oldPlayers[t]=data.players[t]||[]);data.teams[g]=names;names.forEach((n,i)=>{data.players[n]=(document.getElementById(g+i+'players').value||'').split(/\n|,/).map(x=>x.trim()).filter(Boolean);if(old[i]&&old[i]!==n&&oldPlayers[old[i]]){data.players[n]=data.players[n].length?data.players[n]:oldPlayers[old[i]];delete data.players[old[i]]}});save();if(supabaseClient){try{for(let i=0;i<Math.min(4,ids.length);i++){const {error:e}=await supabaseClient.from('teams').update({name:names[i]}).eq('id',ids[i]);if(e)throw e}await syncMatchesFromTeams();await loadTeamsFromSupabase();}catch(e){console.warn(e)}}teamPage()}
 function setTournamentSize(v){if(data.drawDone){alert("Draw হয়ে যাওয়ার পর Tournament Size বদলানো যাবে না। Reset করে আবার নির্বাচন করো।");return}let n=Number(v);if(!Number.isInteger(n)||n<4||n>48||n%4!==0){alert("Team সংখ্যা 4 থেকে 48-এর মধ্যে এবং 4-এর গুণিতক হতে হবে।");return}data.tournamentSize=n;save();fixturePage()}
 function fixturePage(){let n=data.tournamentSize;let sizeBox=`<section class="panel"><h2>👥 Tournament Size</h2><p class="small">তোমার প্রয়োজন অনুযায়ী Team সংখ্যা দাও। 4, 8, 12 ... 48 পর্যন্ত যেকোনো 4-এর গুণিতক দেওয়া যাবে।</p><input type=number min=4 max=48 step=4 value="${n}" onchange="setTournamentSize(this.value)"><p class=small>বর্তমানে Supabase-এ যত Team আছে, তার বেশি দিয়ে Draw করা যাবে না।</p></section>`;let draw=data.drawDone?`<section class="panel done"><h3>🎲 Random Group Draw</h3><p>এই Tournament-এর Draw হয়ে গেছে। নতুন করে করতে চাইলে Reset Tournament করো।</p></section>`:`<section class="panel drawbox"><h2>🎲 Random Group Draw</h2><p class=small>${n} Team-কে প্রতি Group-এ ৪টি করে Randomভাবে ভাগ করা হবে।</p><button class=primary onclick="randomGroupDraw()">🎲 Random Group Draw</button></section>`;main.innerHTML=sizeBox+draw+`<section class=panel><h2>📅 Fixtures</h2><p class=small>প্রতি Group-এ ৬টি ম্যাচ।</p></section><div class=grid>`+groups().map(g=>`<section class=card><h3>Group ${g}</h3>${fixtures().filter(x=>x.g===g).map(x=>`<div class=match><b>${esc(x.a)}</b> vs <b>${esc(x.b)}</b><div class=small>Match ${x.id.slice(1)}</div></div>`).join("")}</section>`).join("")+"</div>"}
+async function ensureGroupsForSize(){
+  if(!supabaseClient) throw new Error("Supabase connection পাওয়া যাচ্ছে না।");
+  const needNames=groups();
+  const {data:existing,error:ee}=await supabaseClient.from("groups").select("id,name,tournament_id").order("name");
+  if(ee) throw ee;
+  const byName={};
+  (existing||[]).forEach(g=>{byName[String(g.name||"").trim().toUpperCase()]=g});
+  let tournamentId=(existing||[]).find(g=>g.tournament_id)?.tournament_id||null;
+  if(!tournamentId){
+    const {data:trs,error:te}=await supabaseClient.from("tournaments").select("id").order("created_at",{ascending:true}).limit(1);
+    if(te) throw te;
+    tournamentId=trs?.[0]?.id||null;
+  }
+  if(!tournamentId) throw new Error("Tournament ID পাওয়া যাচ্ছে না।");
+  for(const name of needNames){
+    if(!byName[name]){
+      const {data:g,error:ge}=await supabaseClient.from("groups").insert({tournament_id:tournamentId,name}).select("id,name,tournament_id").single();
+      if(ge) throw ge;
+      byName[name]=g;
+    }
+  }
+  return byName;
+}
+
 async function randomGroupDraw(){
  if(data.drawDone){alert("এই টুর্নামেন্টে Random Draw আগেই করা হয়েছে।");return}
  if(!confirm(`${data.tournamentSize} Team Random Draw একবারই করা যাবে। শুরু করবো?`))return;
